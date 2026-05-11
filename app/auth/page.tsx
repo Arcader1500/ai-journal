@@ -18,14 +18,21 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithOtp({
+    console.log('[auth] Sending magic link to:', email.trim())
+    console.log('[auth] Redirect URL:', `${window.location.origin}/auth/callback`)
+    console.log('[auth] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+
+    const { data, error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
+    console.log('[auth] signInWithOtp result:', { data, error })
+
     if (error) {
+      console.error('[auth] Error:', error)
       setError(error.message)
     } else {
       setSent(true)
@@ -116,7 +123,7 @@ export default function AuthPage() {
               id="send-magic-link-btn"
               type="submit"
               className="auth-btn"
-              disabled={loading || googleLoading || !email.trim()}
+              disabled={loading || googleLoading}
             >
               {loading ? (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
