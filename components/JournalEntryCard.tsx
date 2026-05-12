@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const EntryEditButton = dynamic(() => import('./EntryEditButton'), { ssr: false })
 
 interface Emotion {
   label: string
@@ -206,6 +209,11 @@ export default function JournalEntryCard({ entry }: JournalEntryCardProps) {
               ))}
             </div>
           </Section>
+
+          {/* Edit with AI — scoped to this entry */}
+          <div className="je-edit-row">
+            <EntryEditButton entry={entry} />
+          </div>
         </div>
       )}
     </article>

@@ -21,11 +21,22 @@ interface PastConversation {
   journal_entry_id?: string
 }
 
+interface JournalEntry {
+  id: string
+  created_at: string
+  emotions: { label: string; intensity: number }[]
+  decisions: { action: string; considered: string }[]
+  patterns: { theme: string; note: string }[]
+  open_questions: string[]
+  key_context: { entity: string; role: string }[]
+}
+
 interface ChatInterfaceProps {
   conversationId: string
   initialMessages: Message[]
   userEmail: string
   pastConversations: PastConversation[]
+  journalEntries: JournalEntry[]
   isSynthesized: boolean
 }
 
@@ -34,6 +45,7 @@ export default function ChatInterface({
   initialMessages,
   userEmail,
   pastConversations,
+  journalEntries,
   isSynthesized,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
@@ -61,6 +73,19 @@ export default function ChatInterface({
     await supabase.auth.signOut()
     router.push('/auth')
     router.refresh()
+  }
+
+  async function handleNewConversation() {
+    try {
+      const res = await fetch('/api/conversations/new', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.id) {
+        router.push(`/chat?conv=${data.id}`)
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to create new conversation:', err)
+    }
   }
 
   async function handleSynthesize() {
@@ -148,7 +173,9 @@ export default function ChatInterface({
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         pastConversations={pastConversations}
+        journalEntries={journalEntries}
         activeConversationId={conversationId}
+        onNewConversation={handleNewConversation}
       />
 
       <div className="chat-layout">

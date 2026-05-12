@@ -14,7 +14,11 @@ function todayStart(): string {
   return d.toISOString()
 }
 
-export default async function ChatPage() {
+export default async function ChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conv?: string }>
+}) {
   const supabase = await createClient()
 
   const {
@@ -25,6 +29,9 @@ export default async function ChatPage() {
     redirect('/auth')
   }
 
+  // ── Resolve conv param ────────────────────────────────────────────────────
+  const { conv: convParam } = await searchParams
+
   // ── Load all conversations for this user ──────────────────────────────────
   const { data: allConversations } = await supabase
     .from('conversations')
@@ -34,40 +41,41 @@ export default async function ChatPage() {
 
   const conversations = allConversations ?? []
 
-  // ── Find today's active (unsynthesized) conversation ─────────────────────
-  const todayISO = todayStart()
-  let activeConversation = conversations.find(
-    (c) => !c.synthesized && c.started_at >= todayISO
-  ) ?? null
+  // ── Resolve active conversation ──────────────────────────────────────────
+  let activeConversation =
+    // 1. Specific conv requested via ?conv=
+    (convParam
+      ? conversations.find((c) => c.id === convParam)
+      : null) ??
+    // 2. Today's unsynthesized conversation
+    conversations.find((c) => !c.synthesized && c.started_at >= todayStart()) ??
+    null
 
-  // ── Auto-create if none exists for today ─────────────────────────────────
+  // ── Auto-create if none exists ────────────────────────────────────────────
   if (!activeConversation) {
     const { data: newConv, error } = await supabase
       .from('conversations')
-      .insert({
-        user_id: user.id,
-        messages: [],
-        synthesized: false,
-      })
+      .insert({ user_id: user.id, messages: [], synthesized: false })
       .select()
       .single()
 
     if (!error && newConv) {
       activeConversation = newConv
-      // Prepend to list so the sidebar shows it
       conversations.unshift(newConv)
     }
   }
 
-  // ── Past (synthesized) conversations for the sidebar ─────────────────────
-  // Join with journal_entries to get the entry ID for linking
-  const { data: journalEntries } = await supabase
+  // ── Journal entries for sidebar + entry map for session links ─────────────
+  const { data: rawEntries } = await supabase
     .from('journal_entries')
-    .select('id, conversation_id')
+    .select('id, created_at, conversation_id, emotions, decisions, patterns, open_questions, key_context')
     .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const journalEntries = rawEntries ?? []
 
   const entryMap = new Map<string, string>(
-    (journalEntries ?? []).map((e) => [e.conversation_id, e.id])
+    journalEntries.map((e) => [e.conversation_id, e.id])
   )
 
   const pastConversations = conversations
@@ -80,6 +88,7 @@ export default async function ChatPage() {
       initialMessages={activeConversation?.messages ?? []}
       userEmail={user.email ?? ''}
       pastConversations={pastConversations}
+      journalEntries={journalEntries}
       isSynthesized={activeConversation?.synthesized ?? false}
     />
   )
