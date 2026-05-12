@@ -26,6 +26,9 @@ export default function AuthPage() {
       email: email.trim(),
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // Ask Supabase to issue a long-lived session (default is already
+        // 1 week; the middleware keeps it refreshed automatically).
+        shouldCreateUser: true,
       },
     })
 

@@ -31,8 +31,9 @@ interface SynthesisResult {
   key_context: { entity: string; role: string }[]
 }
 
-// Vercel: give synthesis up to 30s (requires Vercel Pro for > 10s on Hobby)
-export const maxDuration = 30
+// Vercel Hobby cap is 10s; Pro allows up to 60s.
+// We truncate messages below to stay comfortably under 10s.
+export const maxDuration = 10
 
 export async function POST(request: Request) {
   try {
@@ -84,28 +85,29 @@ export async function POST(request: Request) {
     }
 
     // 5. Format conversation text for Claude
-    const conversationText = messages
+    // Truncate to last 30 messages to keep the prompt short and fast
+    const recentMessages = messages.slice(-30)
+    const conversationText = recentMessages
       .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n\n')
 
-    // 6. Call Claude
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    // 6. Call Gemini
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-    const claudeResponse = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 2048,
-      system: SYNTHESIS_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Here is the journaling conversation to analyze:\n\n${conversationText}`,
-        },
-      ],
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash-preview-04-17',
+      systemInstruction: SYNTHESIS_PROMPT,
+      generationConfig: {
+        responseMimeType: 'application/json',
+      },
     })
 
-    const rawText =
-      claudeResponse.content[0].type === 'text' ? claudeResponse.content[0].text : ''
+    const result = await model.generateContent(
+      `Here is the journaling conversation to analyze:\n\n${conversationText}`
+    )
+
+    const rawText = result.response.text()
 
     // 7. Parse JSON — strip any accidental markdown fences
     let synthesis: SynthesisResult
@@ -148,7 +150,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, entryId: entry.id })
   } catch (err) {
-    console.error('Synthesize API error:', err)
+    const message = err instanceof Error ? err.message : String(err)
+    const name = err instanceof Error ? err.name : 'UnknownError'
+    console.error('Synthesize API error:', name, message)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
