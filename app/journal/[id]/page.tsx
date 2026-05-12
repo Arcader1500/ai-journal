@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import JournalEntryCard, { type JournalEntry } from '@/components/JournalEntryCard'
+import EntryEditButton from '@/components/EntryEditButton'
 
 export const metadata = {
   title: 'Journal Entry — AI Journal',
@@ -46,6 +47,8 @@ export default async function JournalEntryPage({
           <div className="chat-header-icon" aria-hidden>✦</div>
           <h1 className="journal-page-title">Journal Entry</h1>
         </div>
+        {/* Client component — renders the "Edit with AI" button + drawer */}
+        <EntryEditButton entry={entry as JournalEntry} />
       </header>
 
       <main className="journal-page-body">
