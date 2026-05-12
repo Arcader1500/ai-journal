@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.0-flash-preview',
+      model: 'gemini-3-flash-preview',
       systemInstruction: SYNTHESIS_PROMPT,
       generationConfig: {
         responseMimeType: 'application/json',
