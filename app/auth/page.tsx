@@ -1,7 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+// Isolated so it can be wrapped in Suspense — required by Next.js for
+// static pages that call useSearchParams during production builds.
+function CallbackError() {
+  const searchParams = useSearchParams()
+  const callbackError = searchParams.get('error')
+  if (!callbackError) return null
+  return (
+    <p className="auth-error" role="alert">
+      {callbackError === 'auth_callback_failed'
+        ? 'Sign-in link expired or already used. Please request a new one.'
+        : 'Authentication failed. Please try again.'}
+    </p>
+  )
+}
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
@@ -75,6 +91,11 @@ export default function AuthPage() {
         <p className="auth-subheading">
           An honest AI companion to help you think clearly, reflect deeply, and understand yourself better.
         </p>
+
+        {/* Callback error banner (e.g. magic link expired / already used) */}
+        <Suspense>
+          <CallbackError />
+        </Suspense>
 
         {/* Google OAuth */}
         <button
