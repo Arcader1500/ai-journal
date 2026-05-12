@@ -161,35 +161,44 @@ User can end a conversation, hit "Synthesize", and view the structured entry.
 
 **Goal:** The chat AI silently retrieves relevant past entries to maintain long-term context.
 
+#### Strategy: Hybrid — First-message retrieval + on-demand tool call
+
+Embedding on every message is wasteful. Instead:
+
+1. **On the first user message** of a conversation → embed it → retrieve top 3 similar past entries → inject as system context for the entire session.
+2. **Register a `search_past_entries` tool** the model can call mid-conversation if it encounters a reference it doesn't recognise (e.g. a person's name, "like last time", etc.).
+3. **Graceful fallback** — if the user has no synthesized entries yet, skip RAG entirely.
+
 #### Tasks
 
-1. **Enable embeddings**
-   - On synthesis, call Anthropic Embeddings API on a summary string of the entry
-   - Store embedding in `journal_entries.embedding` (vector column)
+1. **Enable embeddings on synthesis**
+   - After saving the `journal_entries` row, build a summary string from the structured fields
+   - Call `text-embedding-004` (Gemini) via `embedContent`
+   - Store result in `journal_entries.embedding` (vector(768) column)
 
-2. **Retrieval function**
-   - On each chat API call, embed the latest user message
-   - Query Supabase pgvector for top 3 similar past entries:
-     ```sql
-     SELECT * FROM journal_entries
-     WHERE user_id = $1
-     ORDER BY embedding <=> $query_embedding
-     LIMIT 3
-     ```
+2. **`lib/embeddings.ts`** — shared helpers
+   - `embedText(text: string): Promise<number[]>` — calls Gemini embedContent
+   - `retrieveRelevantEntries(userId, queryEmbedding, limit): Promise<Entry[]>` — pgvector cosine search
+   - `formatEntriesAsContext(entries): string` — renders entries as injected system text
 
-3. **Inject context into chat**
-   - Retrieved entries are passed as system context, not shown to user:
-     ```
-     [BACKGROUND CONTEXT - not visible to user]
-     Relevant past journal entries:
-     Entry 1 (2025-04-10): emotions: [...], patterns: [...], open_questions: [...]
-     Entry 2 ...
-     [END BACKGROUND CONTEXT]
-     ```
+3. **Chat API — first-message retrieval**
+   - If `messages.length === 1` (first user turn in this session) AND user has ≥1 entry:
+     - Embed the user's message
+     - Retrieve top 3 entries
+     - Prepend formatted context block to system prompt
 
-4. **Graceful fallback**
-   - If no entries exist yet, chat works normally without RAG
-   - Only retrieve if user has at least 1 synthesized entry
+4. **Chat API — `search_past_entries` tool**
+   - Declare the tool in the Gemini chat call
+   - If the model invokes it, embed the query string, run retrieval, and inject results as a tool response
+   - Continue the stream with the enriched context
+
+5. **SQL migration**
+   ```sql
+   -- Run once in Supabase SQL editor
+   ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS embedding vector(768);
+   CREATE INDEX IF NOT EXISTS journal_entries_embedding_idx
+     ON journal_entries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
+   ```
 
 #### Milestone
 AI references past patterns naturally without the user needing to re-explain context.

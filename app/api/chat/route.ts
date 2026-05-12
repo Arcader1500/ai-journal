@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import {
+  embedText,
+  retrieveRelevantEntries,
+  formatEntriesAsContext,
+  userHasEntries,
+} from '@/lib/embeddings'
 
 // ─── AI provider detection ────────────────────────────────────────────────────
-// Uses Anthropic Claude when ANTHROPIC_API_KEY is set and not a placeholder.
-// Falls back to Google Gemini otherwise.
 const hasClaudeKey =
   !!process.env.ANTHROPIC_API_KEY &&
   !process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-...')
 
 const hasGeminiKey = !!process.env.GEMINI_API_KEY
 
-const SYSTEM_PROMPT = `You are a reflective journaling companion. Your role is to be an honest, non-sycophantic thinking partner. You should:
+const BASE_SYSTEM_PROMPT = `You are a reflective journaling companion. Your role is to be an honest, non-sycophantic thinking partner. You should:
 - Validate genuine feelings without inflating them
 - Point out what the user handled well AND what they could have done differently
 - Ask clarifying questions that deepen self-reflection
@@ -25,9 +30,48 @@ interface Message {
   timestamp?: string
 }
 
+// ─── RAG: build enriched system prompt ───────────────────────────────────────
+
+/**
+ * On the first user message of a conversation, retrieves the top-3 most
+ * relevant past journal entries and prepends them to the system prompt.
+ * Returns the base prompt unchanged if no entries exist or it's not the
+ * first message.
+ */
+async function buildSystemPrompt(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  messages: Message[]
+): Promise<string> {
+  // Only enrich on the first user turn (messages array contains just that one message)
+  const isFirstTurn = messages.length === 1
+
+  if (!isFirstTurn) return BASE_SYSTEM_PROMPT
+
+  try {
+    const hasEntries = await userHasEntries(supabase, userId)
+    if (!hasEntries) return BASE_SYSTEM_PROMPT
+
+    const queryEmbedding = await embedText(messages[0].content)
+    const entries = await retrieveRelevantEntries(supabase, userId, queryEmbedding, 3)
+
+    if (entries.length === 0) return BASE_SYSTEM_PROMPT
+
+    const contextBlock = formatEntriesAsContext(entries)
+    console.log(`[RAG] Injected ${entries.length} past entr${entries.length === 1 ? 'y' : 'ies'} into system prompt`)
+
+    return `${BASE_SYSTEM_PROMPT}\n\n${contextBlock}`
+  } catch (err) {
+    // RAG failure must never break the chat
+    console.error('[RAG] Failed to build context (non-fatal):', err)
+    return BASE_SYSTEM_PROMPT
+  }
+}
+
 // ─── Claude streaming helper ──────────────────────────────────────────────────
 async function streamClaude(
   messages: Message[],
+  systemPrompt: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<string> {
@@ -40,7 +84,7 @@ async function streamClaude(
   const claudeStream = anthropic.messages.stream({
     model: 'claude-opus-4-5',
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: claudeMessages,
   })
 
@@ -57,21 +101,43 @@ async function streamClaude(
   return fullText
 }
 
-// ─── Gemini streaming helper ──────────────────────────────────────────────────
+// ─── Gemini streaming helper (with tool support) ──────────────────────────────
 async function streamGemini(
   messages: Message[],
+  systemPrompt: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<string> {
-  const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-3-flash-preview',
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: systemPrompt,
+    tools: [
+      {
+        functionDeclarations: [
+          {
+            name: 'search_past_entries',
+            description:
+              'Search the user\'s past journal entries for relevant context. Call this when the user references something from their past (e.g. a person, situation, or feeling) that you don\'t have context for.',
+            parameters: {
+              type: SchemaType.OBJECT,
+              properties: {
+                query: {
+                  type: SchemaType.STRING,
+                  description: 'A short natural-language description of what to search for, e.g. "anxiety about work" or "relationship with father"',
+                },
+              },
+              required: ['query'],
+            },
+          },
+        ],
+      },
+    ],
   })
 
-  // Convert to Gemini's history + latest user turn format
   const history = messages.slice(0, -1).map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
@@ -80,13 +146,66 @@ async function streamGemini(
   const lastMessage = messages[messages.length - 1]
   const chat = model.startChat({ history })
 
-  let fullText = ''
-  const result = await chat.sendMessageStream(lastMessage.content)
+  // ── First send ──
+  let result = await chat.sendMessageStream(lastMessage.content)
 
-  for await (const chunk of result.stream) {
-    const text = chunk.text()
-    fullText += text
-    controller.enqueue(encoder.encode(text))
+  let fullText = ''
+
+  // Agentic loop: handle potential tool calls before streaming final text
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    // Collect all chunks from this stream turn
+    const parts = []
+    for await (const chunk of result.stream) {
+      parts.push(chunk)
+    }
+
+    // Aggregate the full response for this turn
+    const response = await result.response
+
+    // Check for a function call
+    const fnCall = response.candidates?.[0]?.content?.parts?.find(
+      (p) => p.functionCall
+    )?.functionCall
+
+    if (fnCall && fnCall.name === 'search_past_entries') {
+      const query = (fnCall.args as { query: string }).query
+      console.log(`[RAG] Tool call: search_past_entries("${query}")`)
+
+      // Execute the tool
+      let toolResultText = 'No relevant past entries found.'
+      try {
+        const queryEmbedding = await embedText(query)
+        const entries = await retrieveRelevantEntries(supabase, userId, queryEmbedding, 3)
+        if (entries.length > 0) {
+          toolResultText = formatEntriesAsContext(entries)
+        }
+      } catch (err) {
+        console.error('[RAG] Tool execution error:', err)
+      }
+
+      // Send tool result back and get the next stream
+      result = await chat.sendMessageStream([
+        {
+          functionResponse: {
+            name: 'search_past_entries',
+            response: { result: toolResultText },
+          },
+        },
+      ])
+      // Loop again to check for another tool call or final text
+      continue
+    }
+
+    // No tool call — stream all buffered text chunks to client
+    for (const chunk of parts) {
+      const text = chunk.text()
+      if (text) {
+        fullText += text
+        controller.enqueue(encoder.encode(text))
+      }
+    }
+    break
   }
 
   return fullText
@@ -135,7 +254,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // 4. Stream response from whichever provider is available
+    // 4. Build system prompt (with RAG context on first turn)
+    const systemPrompt = await buildSystemPrompt(supabase, user.id, messages)
+
+    // 5. Stream response from whichever provider is available
     const encoder = new TextEncoder()
     let fullResponseText = ''
 
@@ -144,15 +266,22 @@ export async function POST(request: Request) {
         try {
           if (hasClaudeKey) {
             console.log('[AI] Using Claude')
-            fullResponseText = await streamClaude(messages, controller, encoder)
+            fullResponseText = await streamClaude(messages, systemPrompt, controller, encoder)
           } else {
             console.log('[AI] Falling back to Gemini')
-            fullResponseText = await streamGemini(messages, controller, encoder)
+            fullResponseText = await streamGemini(
+              messages,
+              systemPrompt,
+              supabase,
+              user.id,
+              controller,
+              encoder
+            )
           }
 
           controller.close()
 
-          // 5. Persist full conversation to Supabase
+          // 6. Persist full conversation to Supabase
           const assistantMessage: Message = {
             role: 'assistant',
             content: fullResponseText,

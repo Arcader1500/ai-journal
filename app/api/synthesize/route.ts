@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { embedText, buildEntrySummary } from '@/lib/embeddings'
 
 // ─── Synthesis prompt ────────────────────────────────────────────────────────
 const SYNTHESIS_PROMPT = `You are analyzing a journaling conversation. Extract the following and return ONLY valid JSON, no markdown, no preamble, no trailing text:
@@ -142,7 +143,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to save journal entry' }, { status: 500 })
     }
 
-    // 9. Mark conversation as synthesized
+    // 9. Generate and store embedding (best-effort — don't fail synthesis if this errors)
+    try {
+      const summary = buildEntrySummary(synthesis)
+      if (summary.trim()) {
+        const embedding = await embedText(summary)
+        await supabase
+          .from('journal_entries')
+          .update({ embedding })
+          .eq('id', entry.id)
+      }
+    } catch (embErr) {
+      console.error('[Synthesis] Embedding generation failed (non-fatal):', embErr)
+    }
+
+    // 10. Mark conversation as synthesized
     await supabase
       .from('conversations')
       .update({ synthesized: true })
