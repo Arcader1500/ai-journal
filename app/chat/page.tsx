@@ -60,7 +60,19 @@ export default async function ChatPage() {
   }
 
   // ── Past (synthesized) conversations for the sidebar ─────────────────────
-  const pastConversations = conversations.filter((c) => c.synthesized)
+  // Join with journal_entries to get the entry ID for linking
+  const { data: journalEntries } = await supabase
+    .from('journal_entries')
+    .select('id, conversation_id')
+    .eq('user_id', user.id)
+
+  const entryMap = new Map<string, string>(
+    (journalEntries ?? []).map((e) => [e.conversation_id, e.id])
+  )
+
+  const pastConversations = conversations
+    .filter((c) => c.synthesized)
+    .map((c) => ({ ...c, journal_entry_id: entryMap.get(c.id) }))
 
   return (
     <ChatInterface
@@ -68,6 +80,7 @@ export default async function ChatPage() {
       initialMessages={activeConversation?.messages ?? []}
       userEmail={user.email ?? ''}
       pastConversations={pastConversations}
+      isSynthesized={activeConversation?.synthesized ?? false}
     />
   )
 }

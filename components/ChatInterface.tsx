@@ -18,6 +18,7 @@ interface PastConversation {
   started_at: string
   messages: { role: string; content: string }[]
   synthesized: boolean
+  journal_entry_id?: string
 }
 
 interface ChatInterfaceProps {
@@ -25,6 +26,7 @@ interface ChatInterfaceProps {
   initialMessages: Message[]
   userEmail: string
   pastConversations: PastConversation[]
+  isSynthesized: boolean
 }
 
 export default function ChatInterface({
@@ -32,11 +34,15 @@ export default function ChatInterface({
   initialMessages,
   userEmail,
   pastConversations,
+  isSynthesized,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isSynthesizing, setIsSynthesizing] = useState(false)
+  const [synthesizeError, setSynthesizeError] = useState<string | null>(null)
+  const [synthesizeDone, setSynthesizeDone] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -55,6 +61,30 @@ export default function ChatInterface({
     await supabase.auth.signOut()
     router.push('/auth')
     router.refresh()
+  }
+
+  async function handleSynthesize() {
+    if (isSynthesizing || synthesizeDone || isSynthesized) return
+    setSynthesizeError(null)
+    setIsSynthesizing(true)
+    try {
+      const res = await fetch('/api/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSynthesizeError(data.error ?? 'Synthesis failed. Try again.')
+        return
+      }
+      setSynthesizeDone(true)
+      router.refresh()
+    } catch {
+      setSynthesizeError('Network error. Try again.')
+    } finally {
+      setIsSynthesizing(false)
+    }
   }
 
   async function handleSend() {
@@ -142,6 +172,29 @@ export default function ChatInterface({
             </div>
           </div>
           <div className="chat-header-actions">
+            {/* Synthesize button — shown when conversation has messages and is not yet synthesized */}
+            {messages.length > 0 && !isSynthesized && !synthesizeDone && (
+              <button
+                id="synthesize-btn"
+                className={`synth-btn ${isSynthesizing ? 'synth-btn-loading' : ''}`}
+                onClick={handleSynthesize}
+                disabled={isSynthesizing}
+                title="Synthesize this conversation into a journal entry"
+                aria-label="Synthesize conversation"
+              >
+                {isSynthesizing ? (
+                  <><span className="spinner" aria-hidden /> Saving…</>
+                ) : (
+                  '✦ Synthesize'
+                )}
+              </button>
+            )}
+            {(synthesizeDone || isSynthesized) && (
+              <span className="synth-done-badge" aria-label="Entry saved">✓ Saved</span>
+            )}
+            {synthesizeError && (
+              <span className="synth-error" role="alert" title={synthesizeError}>⚠</span>
+            )}
             <button
               id="sign-out-btn"
               className="icon-btn"

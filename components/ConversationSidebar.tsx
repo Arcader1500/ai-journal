@@ -1,10 +1,13 @@
 'use client'
 
+import Link from 'next/link'
+
 interface PastConversation {
   id: string
   started_at: string
   messages: { role: string; content: string }[]
   synthesized: boolean
+  journal_entry_id?: string
 }
 
 interface ConversationSidebarProps {
@@ -80,9 +83,20 @@ export default function ConversationSidebar({
                   key={conv.id}
                   className={`sidebar-item ${conv.id === activeConversationId ? 'sidebar-item-active' : ''}`}
                 >
-                  <div className="sidebar-item-date">{formatDate(conv.started_at)}</div>
-                  <div className="sidebar-item-preview">{getPreview(conv.messages)}</div>
-                  <div className="sidebar-item-badge">Synthesized</div>
+                  {conv.journal_entry_id ? (
+                    <Link
+                      href={`/journal/${conv.journal_entry_id}`}
+                      className="sidebar-item-link"
+                    >
+                      <div className="sidebar-item-date">{formatDate(conv.started_at)}</div>
+                      <div className="sidebar-item-preview">{getPreview(conv.messages)}</div>
+                    </Link>
+                  ) : (
+                    <>
+                      <div className="sidebar-item-date">{formatDate(conv.started_at)}</div>
+                      <div className="sidebar-item-preview">{getPreview(conv.messages)}</div>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

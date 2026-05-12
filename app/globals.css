@@ -740,3 +740,412 @@ input, textarea {
     max-width: 92%;
   }
 }
+
+/* ---------- Synthesize Button ---------- */
+.synth-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-glow);
+  border: 1px solid rgba(124, 110, 247, 0.3);
+  border-radius: var(--radius-md);
+  letter-spacing: 0.1px;
+  transition: all var(--duration) var(--ease);
+  white-space: nowrap;
+}
+.synth-btn:hover:not(:disabled) {
+  background: rgba(124, 110, 247, 0.25);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.synth-btn:active:not(:disabled) { transform: translateY(0); }
+.synth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.synth-btn-loading {
+  cursor: wait;
+}
+
+.synth-done-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  background: rgba(104, 217, 164, 0.08);
+  border: 1px solid rgba(104, 217, 164, 0.25);
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s var(--ease) both;
+}
+
+.synth-error {
+  font-size: 18px;
+  cursor: help;
+  color: var(--danger);
+}
+
+/* ---------- Sidebar Link ---------- */
+.sidebar-item-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  width: 100%;
+}
+.sidebar-item-link:hover .sidebar-item-preview {
+  color: var(--text-primary);
+}
+.sidebar-item-link:hover .sidebar-item-date {
+  color: var(--accent);
+}
+.sidebar-item {
+  cursor: pointer;
+}
+
+/* ---------- Journal Page Layout ---------- */
+.journal-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.journal-page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.journal-back-btn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration) var(--ease);
+  white-space: nowrap;
+}
+.journal-back-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.journal-page-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.journal-page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.journal-page-body {
+  flex: 1;
+  padding: 24px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- Journal Entry Card ---------- */
+.je-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: fadeUp 0.3s var(--ease) both;
+}
+
+.je-card-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease);
+}
+.je-card-header:hover {
+  background: var(--surface-hover);
+}
+
+.je-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.je-card-date {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+.je-card-emotions-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.je-emotion-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: var(--accent-glow);
+  color: var(--accent-text);
+  border: 1px solid rgba(124, 110, 247, 0.2);
+  text-transform: capitalize;
+}
+
+.je-chevron {
+  font-size: 22px;
+  color: var(--text-muted);
+  transition: transform var(--duration) var(--ease);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.je-chevron-open {
+  transform: rotate(90deg);
+}
+
+.je-card-body {
+  border-top: 1px solid var(--border-subtle);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.2s var(--ease) both;
+}
+
+.je-empty-note {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px;
+}
+
+/* Section */
+.je-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.je-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.je-section-icon {
+  font-size: 14px;
+  color: var(--accent-text);
+}
+
+.je-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.je-section-body {
+  padding-left: 2px;
+}
+
+/* Emotions */
+.je-emotions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.je-emotion-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.je-emotion-label {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  text-transform: capitalize;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.je-intensity-track {
+  flex: 1;
+  height: 5px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.je-intensity-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+  border-radius: 99px;
+  transition: width 0.6s var(--ease);
+}
+
+.je-intensity-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Generic list */
+.je-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Decisions */
+.je-decision-item {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.je-decision-action {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.je-decision-considered {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Patterns */
+.je-pattern-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.je-pattern-theme {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.je-pattern-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Open Questions */
+.je-questions-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.je-question-item {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding-left: 16px;
+  position: relative;
+}
+.je-question-item::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: var(--accent-text);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+/* Key Context */
+.je-context-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.je-context-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.je-context-entity {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.je-context-role {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Journal page responsive */
+@media (max-width: 640px) {
+  .journal-page-body {
+    padding: 16px 12px 32px;
+  }
+
+  .je-card-header {
+    padding: 16px;
+  }
+
+  .je-card-body {
+    padding: 16px;
+    gap: 20px;
+  }
+
+  .je-emotion-label {
+    min-width: 70px;
+  }
+}
