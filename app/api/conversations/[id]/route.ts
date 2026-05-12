@@ -17,7 +17,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Delete conversation (RLS ensures user can only delete their own)
+    // Fetch the conversation first to verify ownership and synthesized status
+    const { data: conversation, error: fetchError } = await supabase
+      .from('conversations')
+      .select('id, synthesized')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (fetchError || !conversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    // Synthesized conversations have an associated journal entry — disallow
+    // deletion at the API level so the entry is never orphaned.
+    if (conversation.synthesized) {
+      return NextResponse.json(
+        { error: 'Cannot delete a synthesized conversation' },
+        { status: 409 }
+      )
+    }
+
     const { error } = await supabase
       .from('conversations')
       .delete()
