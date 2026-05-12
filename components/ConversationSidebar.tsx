@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
-interface PastConversation {
+interface Conversation {
   id: string
   started_at: string
   messages: { role: string; content: string }[]
@@ -24,10 +24,12 @@ interface JournalEntry {
 interface ConversationSidebarProps {
   isOpen: boolean
   onClose: () => void
-  pastConversations: PastConversation[]
+  allConversations: Conversation[]
   journalEntries: JournalEntry[]
   activeConversationId: string
   onNewConversation: () => void
+  onConversationDeleted?: (id: string) => void
+  onEntryDeleted?: (id: string) => void
 }
 
 function formatDate(iso: string): string {
@@ -59,12 +61,104 @@ function getTopEmotions(emotions: { label: string; intensity: number }[]): strin
 export default function ConversationSidebar({
   isOpen,
   onClose,
-  pastConversations,
+  allConversations,
   journalEntries,
   activeConversationId,
   onNewConversation,
+  onConversationDeleted,
+  onEntryDeleted,
 }: ConversationSidebarProps) {
   const [tab, setTab] = useState<'sessions' | 'entries'>('sessions')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Split into in-progress (unsynthesized) and past (synthesized)
+  const inProgress = allConversations.filter((c) => !c.synthesized)
+  const past = allConversations.filter((c) => c.synthesized)
+
+  async function handleDeleteConversation(id: string) {
+    if (!confirm('Delete this conversation? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onConversationDeleted?.(id)
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function handleDeleteEntry(id: string) {
+    if (!confirm('Delete this journal entry? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/journal-entries/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onEntryDeleted?.(id)
+      }
+    } catch (err) {
+      console.error('Failed to delete entry:', err)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  function ConvItem({ conv }: { conv: Conversation }) {
+    const isActive = conv.id === activeConversationId
+    const isDeleting = deletingId === conv.id
+    return (
+      <li className={`sidebar-item ${isActive ? 'sidebar-item-active' : ''}`}>
+        <div className="sidebar-item-top-row">
+          <div className="sidebar-item-date">{formatDate(conv.started_at)}</div>
+          {isActive && <span className="sidebar-badge-current">Current</span>}
+          {conv.synthesized && !isActive && (
+            <span className="sidebar-badge-synth">Saved</span>
+          )}
+        </div>
+        <div className="sidebar-item-preview">{getPreview(conv.messages)}</div>
+        <div className="sidebar-item-actions">
+          {conv.journal_entry_id && (
+            <Link
+              href={`/journal/${conv.journal_entry_id}`}
+              className="sidebar-action-link"
+              onClick={onClose}
+            >
+              View entry →
+            </Link>
+          )}
+          {!isActive && (
+            conv.synthesized ? (
+              <span
+                className="sidebar-action-link sidebar-action-disabled"
+                title="Already synthesized — start a new conversation instead"
+              >
+                Continue ↩
+              </span>
+            ) : (
+              <Link
+                href={`/chat?conv=${conv.id}`}
+                className="sidebar-action-link sidebar-action-continue"
+                onClick={onClose}
+              >
+                Continue ↩
+              </Link>
+            )
+          )}
+          <button
+            className="sidebar-delete-btn"
+            onClick={() => handleDeleteConversation(conv.id)}
+            disabled={isDeleting || conv.synthesized}
+            aria-label="Delete conversation"
+            title={conv.synthesized ? 'Cannot delete a synthesized conversation' : 'Delete this conversation'}
+          >
+            {isDeleting ? '…' : '🗑'}
+          </button>
+        </div>
+      </li>
+    )
+  }
 
   return (
     <>
@@ -120,51 +214,33 @@ export default function ConversationSidebar({
 
         {/* Tab content */}
         <div className="sidebar-body">
+
           {/* ── Sessions tab ── */}
           {tab === 'sessions' && (
             <>
-              {pastConversations.length === 0 ? (
-                <p className="sidebar-empty">
-                  Past sessions will appear here once you synthesize a conversation.
-                </p>
+              {allConversations.length === 0 ? (
+                <p className="sidebar-empty">No sessions yet. Start chatting!</p>
               ) : (
                 <ul className="sidebar-list">
-                  {pastConversations.map((conv) => (
-                    <li
-                      key={conv.id}
-                      className={`sidebar-item ${conv.id === activeConversationId ? 'sidebar-item-active' : ''}`}
-                    >
-                      <div className="sidebar-item-date">{formatDate(conv.started_at)}</div>
-                      <div className="sidebar-item-preview">{getPreview(conv.messages)}</div>
-                      <div className="sidebar-item-actions">
-                        {conv.journal_entry_id && (
-                          <Link
-                            href={`/journal/${conv.journal_entry_id}`}
-                            className="sidebar-action-link"
-                            onClick={onClose}
-                          >
-                            View entry →
-                          </Link>
-                        )}
-                        {conv.synthesized ? (
-                          <span
-                            className="sidebar-action-link sidebar-action-disabled"
-                            title="Already synthesized — start a new conversation instead"
-                          >
-                            Continue ↩
-                          </span>
-                        ) : (
-                          <Link
-                            href={`/chat?conv=${conv.id}`}
-                            className="sidebar-action-link sidebar-action-continue"
-                            onClick={onClose}
-                          >
-                            Continue ↩
-                          </Link>
-                        )}
-                      </div>
-                    </li>
-                  ))}
+                  {/* In-progress (unsynthesized) conversations */}
+                  {inProgress.length > 0 && (
+                    <>
+                      <li className="sidebar-section-label">In Progress</li>
+                      {inProgress.map((conv) => (
+                        <ConvItem key={conv.id} conv={conv} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* Past (synthesized) conversations */}
+                  {past.length > 0 && (
+                    <>
+                      <li className="sidebar-section-label">Past Sessions</li>
+                      {past.map((conv) => (
+                        <ConvItem key={conv.id} conv={conv} />
+                      ))}
+                    </>
+                  )}
                 </ul>
               )}
             </>
@@ -181,23 +257,34 @@ export default function ConversationSidebar({
                 <ul className="sidebar-list">
                   {journalEntries.map((entry) => (
                     <li key={entry.id} className="sidebar-item">
-                      <Link
-                        href={`/journal/${entry.id}`}
-                        className="sidebar-item-link"
-                        onClick={onClose}
-                      >
-                        <div className="sidebar-item-date">{formatDate(entry.created_at)}</div>
-                        <div className="sidebar-item-preview">{getTopEmotions(entry.emotions)}</div>
-                        {entry.emotions?.length > 0 && (
-                          <div className="sidebar-item-chips">
-                            {entry.emotions.slice(0, 3).map((e) => (
-                              <span key={e.label} className="sidebar-item-emotion-chip">
-                                {e.label}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </Link>
+                      <div className="sidebar-item-entry-row">
+                        <Link
+                          href={`/journal/${entry.id}`}
+                          className="sidebar-item-link"
+                          onClick={onClose}
+                        >
+                          <div className="sidebar-item-date">{formatDate(entry.created_at)}</div>
+                          <div className="sidebar-item-preview">{getTopEmotions(entry.emotions)}</div>
+                          {entry.emotions?.length > 0 && (
+                            <div className="sidebar-item-chips">
+                              {entry.emotions.slice(0, 3).map((e) => (
+                                <span key={e.label} className="sidebar-item-emotion-chip">
+                                  {e.label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </Link>
+                        <button
+                          className="sidebar-delete-btn sidebar-delete-btn-entry"
+                          onClick={() => handleDeleteEntry(entry.id)}
+                          disabled={deletingId === entry.id}
+                          aria-label="Delete entry"
+                          title="Delete this journal entry"
+                        >
+                          {deletingId === entry.id ? '…' : '🗑'}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

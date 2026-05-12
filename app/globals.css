@@ -830,6 +830,53 @@ input, textarea {
   text-transform: capitalize;
 }
 
+/* Section label (In Progress / Past Sessions) */
+.sidebar-section-label {
+  list-style: none;
+  padding: 10px 14px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Top row: date + badge */
+.sidebar-item-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* "Current" badge on the active session */
+.sidebar-badge-current {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  background: rgba(124, 110, 247, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(124, 110, 247, 0.35);
+}
+
+/* "Saved" badge on synthesized sessions */
+.sidebar-badge-synth {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  background: rgba(104, 217, 164, 0.08);
+  color: var(--success);
+  border: 1px solid rgba(104, 217, 164, 0.2);
+}
+
+
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
   .auth-card {
@@ -1273,12 +1320,15 @@ input, textarea {
 }
 .entry-edit-trigger:active { transform: translateY(0); }
 
-/* Edit button row inside expanded card body */
+/* Edit/action row inside expanded card body */
 .je-edit-row {
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ---------- Entry Edit Drawer ---------- */
@@ -1519,3 +1569,69 @@ input, textarea {
 .eed-textarea {
   min-height: unset;
 }
+
+/* ---------- Sidebar delete button ---------- */
+.sidebar-delete-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-muted);
+  background: transparent;
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+.sidebar-delete-btn:hover:not(:disabled) {
+  background: rgba(242, 116, 116, 0.12);
+  color: var(--danger);
+}
+.sidebar-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Row layout for entries tab (link + delete side by side) */
+.sidebar-item-entry-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.sidebar-item-entry-row .sidebar-item-link {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-delete-btn-entry {
+  margin-top: 2px;
+}
+
+/* ---------- Journal entry card delete button ---------- */
+.je-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  background: rgba(242, 116, 116, 0.06);
+  border: 1px solid rgba(242, 116, 116, 0.2);
+  border-radius: var(--radius-md);
+  transition: all var(--duration) var(--ease);
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
+.je-delete-btn:hover:not(:disabled) {
+  background: rgba(242, 116, 116, 0.15);
+  border-color: var(--danger);
+  transform: translateY(-1px);
+}
+.je-delete-btn:active:not(:disabled) { transform: translateY(0); }
+.je-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

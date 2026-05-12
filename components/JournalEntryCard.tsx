@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
 const EntryEditButton = dynamic(() => import('./EntryEditButton'), { ssr: false })
@@ -38,6 +39,8 @@ export interface JournalEntry {
 
 interface JournalEntryCardProps {
   entry: JournalEntry
+  /** Called after a successful server-side delete so parents can update their list */
+  onDeleted?: (id: string) => void
 }
 
 function formatDate(iso: string): string {
@@ -76,8 +79,28 @@ function Section({
   )
 }
 
-export default function JournalEntryCard({ entry }: JournalEntryCardProps) {
+export default function JournalEntryCard({ entry, onDeleted }: JournalEntryCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const router = useRouter()
+
+  async function handleDelete() {
+    if (!confirm('Delete this journal entry? This cannot be undone.')) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/journal-entries/${entry.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onDeleted?.(entry.id)
+        // If viewing standalone entry page, go back to chat
+        router.push('/chat')
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to delete entry:', err)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const hasContent =
     entry.emotions?.length > 0 ||
@@ -210,9 +233,22 @@ export default function JournalEntryCard({ entry }: JournalEntryCardProps) {
             </div>
           </Section>
 
-          {/* Edit with AI — scoped to this entry */}
+          {/* Actions row: Edit with AI + Delete */}
           <div className="je-edit-row">
             <EntryEditButton entry={entry} />
+            <button
+              className="je-delete-btn"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              aria-label="Delete this journal entry"
+              title="Delete this journal entry"
+            >
+              {isDeleting ? (
+                <><span className="spinner" aria-hidden /> Deleting…</>
+              ) : (
+                '🗑 Delete Entry'
+              )}
+            </button>
           </div>
         </div>
       )}

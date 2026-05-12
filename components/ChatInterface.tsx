@@ -35,7 +35,7 @@ interface ChatInterfaceProps {
   conversationId: string
   initialMessages: Message[]
   userEmail: string
-  pastConversations: PastConversation[]
+  allConversations: PastConversation[]
   journalEntries: JournalEntry[]
   isSynthesized: boolean
 }
@@ -44,7 +44,7 @@ export default function ChatInterface({
   conversationId,
   initialMessages,
   userEmail,
-  pastConversations,
+  allConversations,
   journalEntries,
   isSynthesized,
 }: ChatInterfaceProps) {
@@ -55,6 +55,8 @@ export default function ChatInterface({
   const [isSynthesizing, setIsSynthesizing] = useState(false)
   const [synthesizeError, setSynthesizeError] = useState<string | null>(null)
   const [synthesizeDone, setSynthesizeDone] = useState(false)
+  const [localConversations, setLocalConversations] = useState(allConversations)
+  const [localEntries, setLocalEntries] = useState(journalEntries)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -172,10 +174,20 @@ export default function ChatInterface({
       <ConversationSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        pastConversations={pastConversations}
-        journalEntries={journalEntries}
+        allConversations={localConversations}
+        journalEntries={localEntries}
         activeConversationId={conversationId}
         onNewConversation={handleNewConversation}
+        onConversationDeleted={(id) => {
+          setLocalConversations((prev) => prev.filter((c) => c.id !== id))
+          // If the active conversation was deleted, create a fresh one
+          if (id === conversationId) {
+            handleNewConversation()
+          }
+        }}
+        onEntryDeleted={(id) =>
+          setLocalEntries((prev) => prev.filter((e) => e.id !== id))
+        }
       />
 
       <div className="chat-layout">

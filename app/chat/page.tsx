@@ -78,16 +78,18 @@ export default async function ChatPage({
     journalEntries.map((e) => [e.conversation_id, e.id])
   )
 
-  const pastConversations = conversations
-    .filter((c) => c.synthesized)
-    .map((c) => ({ ...c, journal_entry_id: entryMap.get(c.id) }))
+  // Pass ALL conversations — sidebar will split them into in-progress vs. past
+  const allConvs = conversations.map((c) => ({
+    ...c,
+    journal_entry_id: entryMap.get(c.id),
+  }))
 
   return (
     <ChatInterface
       conversationId={activeConversation?.id ?? ''}
       initialMessages={activeConversation?.messages ?? []}
       userEmail={user.email ?? ''}
-      pastConversations={pastConversations}
+      allConversations={allConvs}
       journalEntries={journalEntries}
       isSynthesized={activeConversation?.synthesized ?? false}
     />
