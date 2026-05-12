@@ -11,7 +11,7 @@ import {
 // ─── AI provider detection ────────────────────────────────────────────────────
 const hasClaudeKey =
   !!process.env.ANTHROPIC_API_KEY &&
-  !process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-...')
+  process.env.ANTHROPIC_API_KEY !== 'sk-ant-...'
 
 const hasGeminiKey = !!process.env.GEMINI_API_KEY
 

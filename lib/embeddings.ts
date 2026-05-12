@@ -72,7 +72,7 @@ export function buildEntrySummary(entry: Omit<JournalEntry, 'id' | 'created_at'>
  *
  *   create or replace function match_journal_entries(
  *     p_user_id   uuid,
- *     p_embedding vector(768),
+ *     p_embedding vector(1536),
  *     p_limit     int default 3
  *   ) returns setof journal_entries
  *   language sql stable as $$
