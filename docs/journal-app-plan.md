@@ -13,13 +13,14 @@ RAG to maintain long-term context without re-explaining.
 
 | Layer | Tool | Purpose |
 |---|---|---|
-| Frontend | Next.js (App Router) | Web + mobile-friendly UI |
+| Frontend | Next.js 16 (App Router) | Web + mobile-friendly UI |
 | Hosting | Vercel | Free tier deployment |
 | Database | Supabase (PostgreSQL) | Structured storage |
 | Vector Search | Supabase pgvector | RAG retrieval |
-| Auth | Supabase Auth | User sessions |
-| LLM | Anthropic Claude API | Chat + synthesis |
-| Embeddings | Anthropic Embeddings API | Vectorize journal entries |
+| Auth | Supabase Auth | User sessions (magic link + Google OAuth) |
+| LLM (primary) | Gemini `gemini-3-flash-preview` | Chat + synthesis + entry editing |
+| LLM (fallback) | Anthropic Claude (if key set) | Chat fallback |
+| Embeddings | Gemini `gemini-embedding-001` | Vectorize journal entries (1536-dim) |
 
 ---
 
@@ -173,8 +174,8 @@ Embedding on every message is wasteful. Instead:
 
 1. **Enable embeddings on synthesis**
    - After saving the `journal_entries` row, build a summary string from the structured fields
-   - Call `text-embedding-004` (Gemini) via `embedContent`
-   - Store result in `journal_entries.embedding` (vector(768) column)
+   - Call `gemini-embedding-001` (Gemini) via `embedContent` with 1536-dim output
+   - Store result in `journal_entries.embedding` (vector(1536) column)
 
 2. **`lib/embeddings.ts`** — shared helpers
    - `embedText(text: string): Promise<number[]>` — calls Gemini embedContent
@@ -195,7 +196,7 @@ Embedding on every message is wasteful. Instead:
 5. **SQL migration**
    ```sql
    -- Run once in Supabase SQL editor
-   ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS embedding vector(768);
+   ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS embedding vector(1536);
    CREATE INDEX IF NOT EXISTS journal_entries_embedding_idx
      ON journal_entries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
    ```
@@ -220,19 +221,35 @@ AI references past patterns naturally without the user needing to re-explain con
 ```
 /app
   /api
-    /chat         route.ts      -- chat with Claude
-    /synthesize   route.ts      -- trigger synthesis
-  /chat           page.tsx      -- chat interface
-  /journal        page.tsx      -- view past entries
-  /auth           page.tsx      -- sign in/up
+    /admin/backfill-embeddings  route.ts  -- one-shot embedding backfill
+    /chat                       route.ts  -- streaming chat (Gemini + RAG tool calling)
+    /conversations/new          route.ts  -- POST create conversation
+    /conversations/[id]         route.ts  -- DELETE conversation (blocks synthesized)
+    /entry-edit                 route.ts  -- AI-assisted entry editing (PATCH protocol)
+    /journal-entries/[id]       route.ts  -- DELETE journal entry
+    /synthesize                 route.ts  -- conversation → structured journal entry
+  /auth
+    /callback                   route.ts  -- OAuth/magic link exchange
+    page.tsx                              -- sign in/up (magic link + Google OAuth)
+  /chat                         page.tsx  -- main chat interface (server component)
+  /journal/[id]                 page.tsx  -- standalone entry detail page
+  globals.css                             -- full design system (~1600 lines)
+  layout.tsx                              -- root layout + PWA metadata
+  manifest.ts                             -- PWA web manifest
+  page.tsx                                -- root redirect → /chat
 /lib
-  supabase.ts                   -- Supabase client
-  claude.ts                     -- Claude API helpers
-  embeddings.ts                 -- embedding + retrieval logic
+  embeddings.ts                           -- embed, retrieve, format, buildEntrySummary
+  supabase/
+    client.ts                             -- browser Supabase client
+    server.ts                             -- server Supabase client (cookie-based)
 /components
-  ChatMessage.tsx
   ChatInput.tsx
+  ChatInterface.tsx
+  ChatMessage.tsx
+  ConversationSidebar.tsx
+  EntryEditButton.tsx
   JournalEntryCard.tsx
+proxy.ts                                  -- Next.js 16 proxy middleware (auth + session refresh)
 ```
 
 ---
