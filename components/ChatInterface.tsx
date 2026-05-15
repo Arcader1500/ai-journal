@@ -57,6 +57,8 @@ export default function ChatInterface({
   const [synthesizeDone, setSynthesizeDone] = useState(false)
   const [localConversations, setLocalConversations] = useState(allConversations)
   const [localEntries, setLocalEntries] = useState(journalEntries)
+  const [jobStatus, setJobStatus] = useState<string | null>(null)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -93,6 +95,7 @@ export default function ChatInterface({
   async function handleSynthesize() {
     if (isSynthesizing || synthesizeDone || isSynthesized) return
     setSynthesizeError(null)
+    setJobStatus('pending')
     setIsSynthesizing(true)
     try {
       const res = await fetch('/api/synthesize', {
@@ -103,16 +106,62 @@ export default function ChatInterface({
       const data = await res.json()
       if (!res.ok) {
         setSynthesizeError(data.error ?? 'Synthesis failed. Try again.')
+        setJobStatus(null)
         return
       }
-      setSynthesizeDone(true)
-      router.refresh()
+
+      // Start polling for job status
+      pollJobStatus(data.jobId)
+
     } catch {
       setSynthesizeError('Network error. Try again.')
-    } finally {
-      setIsSynthesizing(false)
+      setJobStatus(null)
     }
   }
+
+  async function pollJobStatus(jobId: string) {
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/synthesize-job/${jobId}`)
+        const job = await res.json()
+
+        if (!res.ok) {
+          console.error('Failed to poll job status')
+          return
+        }
+
+        setJobStatus(job.status)
+
+        if (job.status === 'completed') {
+          setSynthesizeDone(true)
+          setJobStatus(null)
+          router.refresh()
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
+        } else if (job.status === 'failed') {
+          setSynthesizeError(job.error ?? 'Synthesis failed')
+          setJobStatus(null)
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
+        }
+      } catch (error) {
+        console.error('Error polling job status:', error)
+      }
+    }, 2000) // Poll every 2 seconds
+  }
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
 
   async function handleSend() {
     const text = input.trim()
@@ -222,7 +271,7 @@ export default function ChatInterface({
                 aria-label="Synthesize conversation"
               >
                 {isSynthesizing ? (
-                  <><span className="spinner" aria-hidden /> Saving…</>
+                  <><span className="spinner" aria-hidden /> Synthesizing… {jobStatus && ` (${jobStatus})`}</>
                 ) : (
                   '✦ Synthesize'
                 )}

@@ -1,173 +1,102 @@
+import { createRouteHandlerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { embedText, buildEntrySummary } from '@/lib/embeddings'
-
-// ─── Synthesis prompt ────────────────────────────────────────────────────────
-const SYNTHESIS_PROMPT = `You are analyzing a journaling conversation. Extract the following and return ONLY valid JSON, no markdown, no preamble, no trailing text:
-
-{
-  "emotions": [{ "label": string, "intensity": number }],
-  "decisions": [{ "action": string, "considered": string }],
-  "patterns": [{ "theme": string, "note": string }],
-  "open_questions": [string],
-  "key_context": [{ "entity": string, "role": string }]
-}
-
-Rules:
-- intensity is a float between 0 and 1
-- Be precise. Do not invent. Only extract what is explicitly present.
-- If a field has nothing to extract, use an empty array [].`
-
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp?: string
-}
-
-interface SynthesisResult {
-  emotions: { label: string; intensity: number }[]
-  decisions: { action: string; considered: string }[]
-  patterns: { theme: string; note: string }[]
-  open_questions: string[]
-  key_context: { entity: string; role: string }[]
-}
-
-// Vercel Hobby cap is 10s; Pro allows up to 60s.
-// We truncate messages below to stay comfortably under 10s.
-export const maxDuration = 10
 
 export async function POST(request: Request) {
   try {
-    // 1. Authenticate
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({
+      cookies: () => cookieStore.getAll(),
+    })
 
+    const { conversationId } = await request.json()
+
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // 2. Parse body
-    const body = await request.json()
-    const { conversationId } = body as { conversationId: string }
-
-    if (!conversationId) {
-      return NextResponse.json({ error: 'conversationId is required' }, { status: 400 })
-    }
-
-    // 3. Fetch conversation — verify ownership
-    const { data: conversation, error: fetchError } = await supabase
-      .from('conversations')
-      .select('id, user_id, messages, synthesized')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (fetchError || !conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-    }
-
-    // 4. Idempotency guard
-    if (conversation.synthesized) {
       return NextResponse.json(
-        { error: 'Conversation has already been synthesized' },
-        { status: 409 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       )
     }
 
-    const messages: Message[] = conversation.messages ?? []
-
-    if (messages.length === 0) {
+    // Validate conversationId
+    if (!conversationId) {
       return NextResponse.json(
-        { error: 'Cannot synthesize an empty conversation' },
+        { error: 'conversationId is required' },
         { status: 400 }
       )
     }
 
-    // 5. Format conversation text for Claude
-    // Truncate to last 30 messages to keep the prompt short and fast
-    const recentMessages = messages.slice(-30)
-    const conversationText = recentMessages
-      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n')
+    // Verify conversation exists and belongs to user
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .single()
 
-    // 6. Call Gemini
-    const { GoogleGenerativeAI } = await import('@google/generative-ai')
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      systemInstruction: SYNTHESIS_PROMPT,
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    })
-
-    const result = await model.generateContent(
-      `Here is the journaling conversation to analyze:\n\n${conversationText}`
-    )
-
-    const rawText = result.response.text()
-
-    // 7. Parse JSON — strip any accidental markdown fences
-    let synthesis: SynthesisResult
-    try {
-      const cleaned = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-      synthesis = JSON.parse(cleaned)
-    } catch {
-      console.error('Synthesis JSON parse failed. Raw output:', rawText)
+    if (convError || !conversation) {
       return NextResponse.json(
-        { error: 'AI returned invalid JSON. Try again.' },
-        { status: 502 }
+        { error: 'Conversation not found or unauthorized' },
+        { status: 404 }
       )
     }
 
-    // 8. Save journal entry
-    const { data: entry, error: insertError } = await supabase
-      .from('journal_entries')
+    // Check if already synthesized
+    const { data: existingEntry } = await supabase
+      .from('entries')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .single()
+
+    if (existingEntry) {
+      return NextResponse.json(
+        { error: 'Conversation already synthesized' },
+        { status: 409 }
+      )
+    }
+
+    // Create job record
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
       .insert({
         user_id: user.id,
         conversation_id: conversationId,
-        emotions: synthesis.emotions ?? [],
-        decisions: synthesis.decisions ?? [],
-        patterns: synthesis.patterns ?? [],
-        open_questions: synthesis.open_questions ?? [],
-        key_context: synthesis.key_context ?? [],
+        status: 'pending',
       })
-      .select('id')
+      .select()
       .single()
 
-    if (insertError || !entry) {
-      console.error('Insert journal entry error:', insertError)
-      return NextResponse.json({ error: 'Failed to save journal entry' }, { status: 500 })
+    if (jobError || !job) {
+      return NextResponse.json(
+        { error: 'Failed to create job' },
+        { status: 500 }
+      )
     }
 
-    // 9. Generate and store embedding (best-effort — don't fail synthesis if this errors)
-    try {
-      const summary = buildEntrySummary(synthesis)
-      if (summary.trim()) {
-        const embedding = await embedText(summary)
-        await supabase
-          .from('journal_entries')
-          .update({ embedding })
-          .eq('id', entry.id)
-      }
-    } catch (embErr) {
-      console.error('[Synthesis] Embedding generation failed (non-fatal):', embErr)
-    }
+    // Trigger Edge Function asynchronously
+    const edgeFunctionUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/synthesize-job/edge`
+    await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jobId: job.id,
+        conversationId: conversationId,
+      }),
+    })
 
-    // 10. Mark conversation as synthesized
-    await supabase
-      .from('conversations')
-      .update({ synthesized: true })
-      .eq('id', conversationId)
-
-    return NextResponse.json({ success: true, entryId: entry.id })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    const name = err instanceof Error ? err.name : 'UnknownError'
-    console.error('Synthesize API error:', name, message)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({
+      jobId: job.id,
+      status: 'pending',
+    }, { status: 202 })
+  } catch (error) {
+    console.error('Error in /api/synthesize:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
