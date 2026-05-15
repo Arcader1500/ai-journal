@@ -1,6 +1,6 @@
 export const runtime = 'edge'
 
-import { createRouteHandlerClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
@@ -38,9 +38,17 @@ export async function POST(request: Request) {
     const { jobId, conversationId } = await request.json()
 
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({
-      cookies: () => cookieStore.getAll(),
-    })
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+        },
+      }
+    )
 
     // Get user from cookies
     const { data: { user } } = await supabase.auth.getUser()
@@ -143,9 +151,17 @@ export async function POST(request: Request) {
 
     try {
       const cookieStore = await cookies()
-      const supabase = createRouteHandlerClient({
-        cookies: () => cookieStore.getAll(),
-      })
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll()
+            },
+          },
+        }
+      )
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
