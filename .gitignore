@@ -43,3 +43,7 @@ next-env.d.ts
 .agents/
 
 graphify-out/
+
+# git worktrees
+.worktrees/
+
