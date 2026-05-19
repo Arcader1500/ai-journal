@@ -32,7 +32,7 @@ interface JournalEntry {
 }
 
 interface ChatInterfaceProps {
-  conversationId: string
+  conversationId: string | null
   initialMessages: Message[]
   userEmail: string
   allConversations: PastConversation[]
@@ -41,7 +41,7 @@ interface ChatInterfaceProps {
 }
 
 export default function ChatInterface({
-  conversationId,
+  conversationId: initialConversationId,
   initialMessages,
   userEmail,
   allConversations,
@@ -58,6 +58,8 @@ export default function ChatInterface({
   const [localConversations, setLocalConversations] = useState(allConversations)
   const [localEntries, setLocalEntries] = useState(journalEntries)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
+  // conversationId is null until the user sends their first message
+  const [conversationId, setConversationId] = useState<string | null>(initialConversationId)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -93,9 +95,8 @@ export default function ChatInterface({
   }
 
   async function handleSynthesize() {
-    if (isSynthesizing || synthesizeDone || isSynthesized) return
+    if (isSynthesizing || synthesizeDone || isSynthesized || !conversationId) return
     setSynthesizeError(null)
-    setJobStatus('pending')
     setIsSynthesizing(true)
     try {
       const res = await fetch('/api/synthesize', {
@@ -106,55 +107,21 @@ export default function ChatInterface({
       const data = await res.json()
       if (!res.ok) {
         setSynthesizeError(data.error ?? 'Synthesis failed. Try again.')
-        setJobStatus(null)
+        setIsSynthesizing(false)
         return
       }
 
-      // Start polling for job status
-      pollJobStatus(data.jobId)
-
+      // Synthesis is synchronous now — done immediately
+      setSynthesizeDone(true)
+      setIsSynthesizing(false)
+      router.refresh()
     } catch {
       setSynthesizeError('Network error. Try again.')
-      setJobStatus(null)
+      setIsSynthesizing(false)
     }
   }
 
-  async function pollJobStatus(jobId: string) {
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/synthesize-job/${jobId}`)
-        const job = await res.json()
-
-        if (!res.ok) {
-          console.error('Failed to poll job status')
-          return
-        }
-
-        setJobStatus(job.status)
-
-        if (job.status === 'completed') {
-          setSynthesizeDone(true)
-          setJobStatus(null)
-          router.refresh()
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current)
-            pollingRef.current = null
-          }
-        } else if (job.status === 'failed') {
-          setSynthesizeError(job.error ?? 'Synthesis failed')
-          setJobStatus(null)
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current)
-            pollingRef.current = null
-          }
-        }
-      } catch (error) {
-        console.error('Error polling job status:', error)
-      }
-    }, 2000) // Poll every 2 seconds
-  }
-
-  // Cleanup polling on unmount
+  // Cleanup polling ref on unmount (kept for safety, polling removed)
   useEffect(() => {
     return () => {
       if (pollingRef.current) {
@@ -179,10 +146,25 @@ export default function ChatInterface({
     setIsLoading(true)
 
     try {
+      // Lazily create a conversation on the very first message
+      let activeConvId = conversationId
+      if (!activeConvId) {
+        const convRes = await fetch('/api/conversations/new', { method: 'POST' })
+        if (!convRes.ok) throw new Error('Failed to create conversation')
+        const convData = await convRes.json()
+        activeConvId = convData.id as string
+        setConversationId(activeConvId)
+        // Add to sidebar list immediately
+        setLocalConversations((prev) => [
+          { id: activeConvId!, started_at: new Date().toISOString(), messages: [], synthesized: false },
+          ...prev,
+        ])
+      }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, messages: nextMessages }),
+        body: JSON.stringify({ conversationId: activeConvId, messages: nextMessages }),
       })
 
       if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -225,7 +207,7 @@ export default function ChatInterface({
         onClose={() => setSidebarOpen(false)}
         allConversations={localConversations}
         journalEntries={localEntries}
-        activeConversationId={conversationId}
+        activeConversationId={conversationId ?? ''}
         onNewConversation={handleNewConversation}
         onConversationDeleted={(id) => {
           setLocalConversations((prev) => prev.filter((c) => c.id !== id))

@@ -51,20 +51,6 @@ export default async function ChatPage({
     conversations.find((c) => !c.synthesized && c.started_at >= todayStart()) ??
     null
 
-  // ── Auto-create if none exists ────────────────────────────────────────────
-  if (!activeConversation) {
-    const { data: newConv, error } = await supabase
-      .from('conversations')
-      .insert({ user_id: user.id, messages: [], synthesized: false })
-      .select()
-      .single()
-
-    if (!error && newConv) {
-      activeConversation = newConv
-      conversations.unshift(newConv)
-    }
-  }
-
   // ── Journal entries for sidebar + entry map for session links ─────────────
   const { data: rawEntries } = await supabase
     .from('journal_entries')
@@ -86,7 +72,7 @@ export default async function ChatPage({
 
   return (
     <ChatInterface
-      conversationId={activeConversation?.id ?? ''}
+      conversationId={activeConversation?.id ?? null}
       initialMessages={activeConversation?.messages ?? []}
       userEmail={user.email ?? ''}
       allConversations={allConvs}
