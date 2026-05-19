@@ -19,6 +19,8 @@ interface ChatInterfaceProps {
   allConversations: Conversation[]
   journalEntries: JournalEntry[]
   isSynthesized: boolean
+  /** Entry ID if this conversation is already synthesized (from server) */
+  journalEntryId?: string | null
 }
 
 export default function ChatInterface({
@@ -28,6 +30,7 @@ export default function ChatInterface({
   allConversations,
   journalEntries,
   isSynthesized,
+  journalEntryId: initialJournalEntryId = null,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState('')
@@ -39,6 +42,8 @@ export default function ChatInterface({
   const [localConversations, setLocalConversations] = useState(allConversations)
   const [localEntries, setLocalEntries] = useState(journalEntries)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
+  // entryId of the synthesized journal entry (from API or initial server prop)
+  const [synthesizedEntryId, setSynthesizedEntryId] = useState<string | null>(initialJournalEntryId)
   // conversationId is null until the user sends their first message
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
@@ -95,6 +100,7 @@ export default function ChatInterface({
 
       // Synthesis is synchronous now — done immediately
       setSynthesizeDone(true)
+      setSynthesizedEntryId(data.entryId ?? null)
       setIsSynthesizing(false)
       router.refresh()
     } catch {
@@ -188,7 +194,6 @@ export default function ChatInterface({
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         allConversations={localConversations}
-        journalEntries={localEntries}
         activeConversationId={conversationId ?? ''}
         onNewConversation={handleNewConversation}
         onConversationDeleted={(id) => {
@@ -198,9 +203,6 @@ export default function ChatInterface({
             handleNewConversation()
           }
         }}
-        onEntryDeleted={(id) =>
-          setLocalEntries((prev) => prev.filter((e) => e.id !== id))
-        }
       />
 
       <div className="chat-layout">
@@ -241,7 +243,17 @@ export default function ChatInterface({
                 )}
               </button>
             )}
-            {(synthesizeDone || isSynthesized) && (
+            {(synthesizeDone || isSynthesized) && synthesizedEntryId && (
+              <a
+                id="view-entry-btn"
+                href={`/journal/${synthesizedEntryId}`}
+                className="view-entry-btn"
+                aria-label="View journal entry"
+              >
+                ✦ View Entry →
+              </a>
+            )}
+            {(synthesizeDone || isSynthesized) && !synthesizedEntryId && (
               <span className="synth-done-badge" aria-label="Entry saved">✓ Saved</span>
             )}
             {synthesizeError && (

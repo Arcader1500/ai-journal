@@ -78,6 +78,7 @@ export default async function ChatPage({
       allConversations={allConvs}
       journalEntries={journalEntries}
       isSynthesized={activeConversation?.synthesized ?? false}
+      journalEntryId={activeConversation ? (entryMap.get(activeConversation.id) ?? null) : null}
     />
   )
 }

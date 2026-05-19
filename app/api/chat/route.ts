@@ -9,6 +9,7 @@ import {
   formatEntriesAsContext,
   userHasEntries,
 } from '@/lib/embeddings'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 // ─── AI provider detection ────────────────────────────────────────────────────
 const hasClaudeKey =
@@ -224,6 +225,18 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 1b. Rate limit
+    const limited = checkRateLimit(user.id, 'chat')
+    if (limited) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limited.retryAfterSeconds) },
+        }
+      )
     }
 
     // 2. Parse request body

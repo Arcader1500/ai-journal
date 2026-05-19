@@ -3,17 +3,15 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
-import { type JournalEntry, type Conversation } from '@/lib/types'
+import { type Conversation } from '@/lib/types'
 
 interface ConversationSidebarProps {
   isOpen: boolean
   onClose: () => void
   allConversations: Conversation[]
-  journalEntries: JournalEntry[]
   activeConversationId: string
   onNewConversation: () => void
   onConversationDeleted?: (id: string) => void
-  onEntryDeleted?: (id: string) => void
 }
 
 function formatDate(iso: string): string {
@@ -34,25 +32,15 @@ function getPreview(messages: { role: string; content: string }[]): string {
   return first.content.length > 60 ? first.content.slice(0, 60) + '…' : first.content
 }
 
-function getTopEmotions(emotions: { label: string; intensity: number }[]): string {
-  if (!emotions?.length) return 'No emotions recorded'
-  return emotions
-    .slice(0, 3)
-    .map((e) => e.label)
-    .join(', ')
-}
 
 export default function ConversationSidebar({
   isOpen,
   onClose,
   allConversations,
-  journalEntries,
   activeConversationId,
   onNewConversation,
   onConversationDeleted,
-  onEntryDeleted,
 }: ConversationSidebarProps) {
-  const [tab, setTab] = useState<'sessions' | 'entries'>('sessions')
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Split into in-progress (unsynthesized) and past (synthesized)
@@ -69,21 +57,6 @@ export default function ConversationSidebar({
       }
     } catch (err) {
       console.error('Failed to delete conversation:', err)
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  async function handleDeleteEntry(id: string) {
-    if (!confirm('Delete this journal entry? This cannot be undone.')) return
-    setDeletingId(id)
-    try {
-      const res = await fetch(`/api/journal-entries/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        onEntryDeleted?.(id)
-      }
-    } catch (err) {
-      console.error('Failed to delete entry:', err)
     } finally {
       setDeletingId(null)
     }
@@ -176,104 +149,45 @@ export default function ConversationSidebar({
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="sidebar-tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={tab === 'sessions'}
-            className={`sidebar-tab ${tab === 'sessions' ? 'sidebar-tab-active' : ''}`}
-            onClick={() => setTab('sessions')}
+        {/* Journal Entries link */}
+        <div className="sidebar-new-btn-wrap" style={{ paddingTop: 8 }}>
+          <Link
+            href="/journal"
+            id="journal-entries-btn"
+            className="sidebar-journal-btn"
+            onClick={onClose}
           >
-            Sessions
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'entries'}
-            className={`sidebar-tab ${tab === 'entries' ? 'sidebar-tab-active' : ''}`}
-            onClick={() => setTab('entries')}
-          >
-            Entries
-          </button>
+            <span aria-hidden>✦</span> Journal Entries →
+          </Link>
         </div>
 
-        {/* Tab content */}
+        {/* Sessions label */}
+        <div className="sidebar-section-header">Past Sessions</div>
+
+        {/* Sessions list */}
         <div className="sidebar-body">
-
-          {/* ── Sessions tab ── */}
-          {tab === 'sessions' && (
-            <>
-              {allConversations.length === 0 ? (
-                <p className="sidebar-empty">No sessions yet. Start chatting!</p>
-              ) : (
-                <ul className="sidebar-list">
-                  {/* In-progress (unsynthesized) conversations */}
-                  {inProgress.length > 0 && (
-                    <>
-                      <li className="sidebar-section-label">In Progress</li>
-                      {inProgress.map((conv) => (
-                        <ConvItem key={conv.id} conv={conv} />
-                      ))}
-                    </>
-                  )}
-
-                  {/* Past (synthesized) conversations */}
-                  {past.length > 0 && (
-                    <>
-                      <li className="sidebar-section-label">Past Sessions</li>
-                      {past.map((conv) => (
-                        <ConvItem key={conv.id} conv={conv} />
-                      ))}
-                    </>
-                  )}
-                </ul>
-              )}
-            </>
-          )}
-
-          {/* ── Entries tab ── */}
-          {tab === 'entries' && (
-            <>
-              {journalEntries.length === 0 ? (
-                <p className="sidebar-empty">
-                  Synthesize a conversation to create your first journal entry.
-                </p>
-              ) : (
-                <ul className="sidebar-list">
-                  {journalEntries.map((entry) => (
-                    <li key={entry.id} className="sidebar-item">
-                      <div className="sidebar-item-entry-row">
-                        <Link
-                          href={`/journal/${entry.id}`}
-                          className="sidebar-item-link"
-                          onClick={onClose}
-                        >
-                          <div className="sidebar-item-date">{formatDate(entry.created_at)}</div>
-                          <div className="sidebar-item-preview">{getTopEmotions(entry.emotions)}</div>
-                          {entry.emotions?.length > 0 && (
-                            <div className="sidebar-item-chips">
-                              {entry.emotions.slice(0, 3).map((e) => (
-                                <span key={e.label} className="sidebar-item-emotion-chip">
-                                  {e.label}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </Link>
-                        <button
-                          className="sidebar-delete-btn sidebar-delete-btn-entry"
-                          onClick={() => handleDeleteEntry(entry.id)}
-                          disabled={deletingId === entry.id}
-                          aria-label="Delete entry"
-                          title="Delete this journal entry"
-                        >
-                          {deletingId === entry.id ? '…' : '🗑'}
-                        </button>
-                      </div>
-                    </li>
+          {allConversations.length === 0 ? (
+            <p className="sidebar-empty">No sessions yet. Start chatting!</p>
+          ) : (
+            <ul className="sidebar-list">
+              {inProgress.length > 0 && (
+                <>
+                  <li className="sidebar-section-label">In Progress</li>
+                  {inProgress.map((conv) => (
+                    <ConvItem key={conv.id} conv={conv} />
                   ))}
-                </ul>
+                </>
               )}
-            </>
+
+              {past.length > 0 && (
+                <>
+                  <li className="sidebar-section-label">Synthesized</li>
+                  {past.map((conv) => (
+                    <ConvItem key={conv.id} conv={conv} />
+                  ))}
+                </>
+              )}
+            </ul>
           )}
         </div>
       </aside>

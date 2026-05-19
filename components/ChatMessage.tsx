@@ -1,3 +1,7 @@
+'use client'
+
+import ReactMarkdown from 'react-markdown'
+
 interface MessageProps {
   role: 'user' | 'assistant'
   content: string
@@ -25,7 +29,22 @@ export default function ChatMessage({ role, content, timestamp }: MessageProps) 
 
       {/* Bubble + timestamp */}
       <div className="message-body">
-        <div className={`message-bubble ${role}`}>{content}</div>
+        <div className={`message-bubble ${role}`}>
+          {isUser ? (
+            content
+          ) : (
+            <ReactMarkdown
+              components={{
+                // Open links in new tab for safety
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                ),
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+          )}
+        </div>
         {timestamp && (
           <span className="message-time">{formatTime(timestamp)}</span>
         )}
