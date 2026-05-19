@@ -3,23 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
-interface Conversation {
-  id: string
-  started_at: string
-  messages: { role: string; content: string }[]
-  synthesized: boolean
-  journal_entry_id?: string
-}
-
-interface JournalEntry {
-  id: string
-  created_at: string
-  emotions: { label: string; intensity: number }[]
-  decisions: { action: string; considered: string }[]
-  patterns: { theme: string; note: string }[]
-  open_questions: string[]
-  key_context: { entity: string; role: string }[]
-}
+import { type JournalEntry, type Conversation } from '@/lib/types'
 
 interface ConversationSidebarProps {
   isOpen: boolean

@@ -6,36 +6,7 @@ import dynamic from 'next/dynamic'
 
 const EntryEditButton = dynamic(() => import('./EntryEditButton'), { ssr: false })
 
-interface Emotion {
-  label: string
-  intensity: number
-}
-
-interface Decision {
-  action: string
-  considered: string
-}
-
-interface Pattern {
-  theme: string
-  note: string
-}
-
-interface KeyContext {
-  entity: string
-  role: string
-}
-
-export interface JournalEntry {
-  id: string
-  created_at: string
-  conversation_id: string
-  emotions: Emotion[]
-  decisions: Decision[]
-  patterns: Pattern[]
-  open_questions: string[]
-  key_context: KeyContext[]
-}
+import { type JournalEntry } from '@/lib/types'
 
 interface JournalEntryCardProps {
   entry: JournalEntry

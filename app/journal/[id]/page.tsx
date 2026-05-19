@@ -1,7 +1,8 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import JournalEntryCard, { type JournalEntry } from '@/components/JournalEntryCard'
+import JournalEntryCard from '@/components/JournalEntryCard'
+import { type JournalEntry } from '@/lib/types'
 
 export const metadata = {
   title: 'Journal Entry — AI Journal',

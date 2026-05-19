@@ -2,12 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { JournalEntry } from './JournalEntryCard'
+import { type JournalEntry, type Message } from '@/lib/types'
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 interface Props {
   entry: JournalEntry

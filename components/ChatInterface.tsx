@@ -1,41 +1,22 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import ConversationSidebar from './ConversationSidebar'
 
-export interface Message {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-}
+import { type Message, type JournalEntry, type Conversation } from '@/lib/types'
 
-interface PastConversation {
-  id: string
-  started_at: string
-  messages: { role: string; content: string }[]
-  synthesized: boolean
-  journal_entry_id?: string
-}
-
-interface JournalEntry {
-  id: string
-  created_at: string
-  emotions: { label: string; intensity: number }[]
-  decisions: { action: string; considered: string }[]
-  patterns: { theme: string; note: string }[]
-  open_questions: string[]
-  key_context: { entity: string; role: string }[]
-}
+// Re-export Message so consumers of ChatInterface don't need a separate import
+export type { Message }
 
 interface ChatInterfaceProps {
   conversationId: string | null
   initialMessages: Message[]
   userEmail: string
-  allConversations: PastConversation[]
+  allConversations: Conversation[]
   journalEntries: JournalEntry[]
   isSynthesized: boolean
 }
@@ -64,7 +45,8 @@ export default function ChatInterface({
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const supabase = createClient()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), [])
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {

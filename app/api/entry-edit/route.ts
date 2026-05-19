@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { embedText, buildEntrySummary } from '@/lib/embeddings'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -104,8 +105,30 @@ ${entryJson}`
             .update(updateData)
             .eq('id', entryId)
 
-          if (!updateError) entryUpdated = true
-          else console.error('Supabase patch error:', updateError)
+          if (!updateError) {
+            entryUpdated = true
+
+            // Re-embed with merged data so the RAG index stays current (best-effort)
+            try {
+              const merged = {
+                emotions: (updateData.emotions as typeof entry.emotions) ?? entry.emotions,
+                decisions: (updateData.decisions as typeof entry.decisions) ?? entry.decisions,
+                patterns: (updateData.patterns as typeof entry.patterns) ?? entry.patterns,
+                open_questions: (updateData.open_questions as typeof entry.open_questions) ?? entry.open_questions,
+                key_context: (updateData.key_context as typeof entry.key_context) ?? entry.key_context,
+              }
+              const summary = buildEntrySummary(merged)
+              const embedding = await embedText(summary)
+              await supabase
+                .from('journal_entries')
+                .update({ embedding })
+                .eq('id', entryId)
+            } catch (embedErr) {
+              console.warn('[entry-edit] Re-embedding failed (non-fatal):', embedErr)
+            }
+          } else {
+            console.error('Supabase patch error:', updateError)
+          }
         }
       } catch {
         console.error('Failed to parse PATCH block from AI response')
