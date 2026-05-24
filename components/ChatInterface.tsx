@@ -48,6 +48,9 @@ export default function ChatInterface({
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
+  const [proactiveGreeting, setProactiveGreeting] = useState<string | null>(null)
+  const [greetingLoading, setGreetingLoading] = useState(false)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,6 +64,23 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom()
   }, [messages, scrollToBottom])
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setGreetingLoading(true);
+      fetch('/api/chat/proactive-greeting')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.greeting) {
+            setProactiveGreeting(data.greeting);
+          }
+        })
+        .catch((err) => console.error('Failed to load proactive greeting:', err))
+        .finally(() => setGreetingLoading(false));
+    } else {
+      setProactiveGreeting(null);
+    }
+  }, [messages.length, conversationId]);
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -281,9 +301,17 @@ export default function ChatInterface({
           {messages.length === 0 ? (
             <div className="chat-empty" aria-label="Empty state">
               <div className="chat-empty-icon">✦</div>
-              <h2 className="chat-empty-title">Ready when you are</h2>
-              <p className="chat-empty-body">
-                Tell me what&apos;s on your mind — a decision you&apos;re weighing, something that happened, or how you&apos;re feeling. I&apos;ll help you think it through honestly.
+              <h2 className="chat-empty-title">
+                {greetingLoading ? 'Recalling context...' : 'Ready when you are'}
+              </h2>
+              <p className="chat-empty-body" style={{ fontStyle: proactiveGreeting ? 'italic' : 'normal', color: proactiveGreeting ? 'var(--accent-text)' : 'var(--text-secondary)' }}>
+                {greetingLoading ? (
+                  'Syncing with your cognitive model...'
+                ) : proactiveGreeting ? (
+                  proactiveGreeting
+                ) : (
+                  "Tell me what's on your mind — a decision you're weighing, something that happened, or how you're feeling. I'll help you think it through honestly."
+                )}
               </p>
             </div>
           ) : (
