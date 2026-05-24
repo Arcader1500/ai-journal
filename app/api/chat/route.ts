@@ -10,6 +10,7 @@ import {
   userHasEntries,
 } from '@/lib/embeddings'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getUserPeerCard, syncMessagesToHoncho } from '@/lib/honcho'
 
 // ─── AI provider detection ────────────────────────────────────────────────────
 const hasClaudeKey =
@@ -46,28 +47,39 @@ async function buildSystemPrompt(
   userId: string,
   messages: Message[]
 ): Promise<string> {
+  let basePrompt = BASE_SYSTEM_PROMPT;
+  
+  try {
+    const peerCard = await getUserPeerCard(userId);
+    if (peerCard) {
+      basePrompt = `[PEER SNAPSHOT (HONCHO MEMORY)]\nThis is your core psychological model of the user. Use it to maintain deep cross-session continuity, validate emotions, and understand their personality traits:\n${peerCard}\n\n${BASE_SYSTEM_PROMPT}`;
+    }
+  } catch (err) {
+    console.error('[HONCHO] Failed to inject peer card (non-fatal):', err);
+  }
+
   // Only enrich on the first user turn (messages array contains just that one message)
   const isFirstTurn = messages.length === 1
 
-  if (!isFirstTurn) return BASE_SYSTEM_PROMPT
+  if (!isFirstTurn) return basePrompt
 
   try {
     const hasEntries = await userHasEntries(supabase, userId)
-    if (!hasEntries) return BASE_SYSTEM_PROMPT
+    if (!hasEntries) return basePrompt
 
     const queryEmbedding = await embedText(messages[0].content)
     const entries = await retrieveRelevantEntries(supabase, userId, queryEmbedding, 3)
 
-    if (entries.length === 0) return BASE_SYSTEM_PROMPT
+    if (entries.length === 0) return basePrompt
 
     const contextBlock = formatEntriesAsContext(entries)
     console.log(`[RAG] Injected ${entries.length} past entr${entries.length === 1 ? 'y' : 'ies'} into system prompt`)
 
-    return `${BASE_SYSTEM_PROMPT}\n\n${contextBlock}`
+    return `${basePrompt}\n\n${contextBlock}`
   } catch (err) {
     // RAG failure must never break the chat
     console.error('[RAG] Failed to build context (non-fatal):', err)
-    return BASE_SYSTEM_PROMPT
+    return basePrompt
   }
 }
 
@@ -307,6 +319,11 @@ export async function POST(request: Request) {
             .from('conversations')
             .update({ messages: [...messages, assistantMessage] })
             .eq('id', conversationId)
+
+          // Sync full message list to Honcho in the background
+          syncMessagesToHoncho(user.id, conversationId, [...messages, assistantMessage]).catch((err) =>
+            console.error('[HONCHO] Background sync failed:', err)
+          );
         } catch (err) {
           console.error('Streaming error:', err)
           controller.error(err)
