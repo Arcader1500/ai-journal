@@ -1,3 +1,4 @@
+// Weekly reflection digest generator API endpoint
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
