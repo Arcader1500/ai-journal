@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
@@ -279,6 +280,18 @@ export default function ChatInterface({
             {synthesizeError && (
               <span className="synth-error" role="alert" title={synthesizeError}>⚠</span>
             )}
+            <Link
+              href="/insights"
+              id="insights-btn"
+              className="icon-btn"
+              title="View Insights Dashboard"
+              style={{ fontSize: '1.25rem', marginRight: '8px', color: 'var(--text-secondary)', transition: 'color 0.2s ease', display: 'inline-flex', alignItems: 'center' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent)'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              aria-label="View Insights Dashboard"
+            >
+              📊
+            </Link>
             <button
               id="sign-out-btn"
               className="icon-btn"
