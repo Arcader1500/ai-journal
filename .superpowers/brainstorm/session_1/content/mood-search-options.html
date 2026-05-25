@@ -1,0 +1,171 @@
+<h2>Visual Layout & Integration Approaches</h2>
+<p class="subtitle">Select the design approach that feels most premium and intuitive for mood tracking, search, and weekly reflections.</p>
+
+<div class="cards" data-multiselect="false">
+  
+  <!-- APPROACH A -->
+  <div class="card selected" data-choice="integrated_dashboard" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #121214; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; border-bottom: 1px solid #2d2d30; padding: 12px; height: 100%;">
+      <!-- Mockup Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-size: 0.75rem; color: #a1a1aa; font-weight: 600;">✨ JOURNAL INSIGHTS</span>
+        <span style="font-size: 0.65rem; background: rgba(124, 110, 247, 0.15); color: #7c6ef7; padding: 2px 6px; border-radius: 4px; font-weight: 500;">Honcho Model</span>
+      </div>
+      
+      <!-- Mini Chart -->
+      <div style="flex: 1; min-height: 80px; position: relative; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="font-size: 0.6rem; color: #71717a; text-transform: uppercase;">Emotion Trends (Last 7 Days)</div>
+        <div style="display: flex; height: 40px; align-items: flex-end; gap: 8px; padding: 0 4px; margin-bottom: 4px;">
+          <!-- Bar 1 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 45%; background: linear-gradient(to top, rgba(124,110,247,0.2), #7c6ef7); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Mon</span>
+          </div>
+          <!-- Bar 2 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 75%; background: linear-gradient(to top, rgba(239,68,68,0.2), #ef4444); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Tue</span>
+          </div>
+          <!-- Bar 3 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 90%; background: linear-gradient(to top, rgba(239,68,68,0.2), #ef4444); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Wed</span>
+          </div>
+          <!-- Bar 4 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 30%; background: linear-gradient(to top, rgba(124,110,247,0.2), #7c6ef7); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Thu</span>
+          </div>
+          <!-- Bar 5 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 60%; background: linear-gradient(to top, rgba(16,185,129,0.2), #10b981); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Fri</span>
+          </div>
+          <!-- Bar 6 -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; align-items: center;">
+            <div style="width: 100%; height: 80%; background: linear-gradient(to top, rgba(16,185,129,0.2), #10b981); border-radius: 2px;"></div>
+            <span style="font-size: 0.5rem; color: #52525b; margin-top: 2px;">Sat</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Interactive Search Mockup -->
+      <div style="margin-top: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; display: flex; align-items: center; padding: 4px 8px;">
+        <span style="font-size: 0.7rem; color: #71717a; flex: 1;">🔍 Ask across past entries...</span>
+        <span style="font-size: 0.6rem; color: #7c6ef7; border: 1px solid #7c6ef7; padding: 1px 4px; border-radius: 3px; font-weight: 500;">RAG</span>
+      </div>
+    </div>
+    <div class="card-body" style="background: #18181b; color: #f4f4f5;">
+      <h3 style="font-size: 1rem; color: #fff; margin-bottom: 4px;">Approach A: Integrated Insights Dashboard</h3>
+      <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4;">
+        A new top-level page/view that acts as a dedicated <strong>Insights Center</strong>. It features beautiful spline charts mapping emotional intensity, a longitudinal conversational search input, and a weekly "reflection card" generated from Honcho's conclusions that can be saved directly to Supabase with one click.
+      </p>
+      <div class="pros-cons" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+        <div class="pros" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Pros</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>High visual impact and professional feel.</li>
+            <li>Dedicated space for search and reflections.</li>
+          </ul>
+        </div>
+        <div class="cons" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Cons</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>Requires navigating away from the chat screen.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPROACH B -->
+  <div class="card" data-choice="sidebar_command_center" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #121214; display: flex; flex-direction: row; justify-content: stretch; align-items: stretch; border-bottom: 1px solid #2d2d30; height: 100%;">
+      <!-- Sidebar Drawer Mock -->
+      <div style="width: 70px; background: #18181b; border-right: 1px solid #2d2d30; padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 0.45rem; color: #52525b; font-weight: bold; border-bottom: 1px solid #2d2d30; padding-bottom: 4px; text-transform: uppercase;">Tabs</div>
+        <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; font-size: 0.5rem; color: #71717a; text-align: center;">💬 Chats</div>
+        <div style="background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; font-size: 0.5rem; color: #71717a; text-align: center;">📖 Diary</div>
+        <div style="background: rgba(124, 110, 247, 0.15); border: 1px solid #7c6ef7; padding: 4px; border-radius: 4px; font-size: 0.5rem; color: #7c6ef7; text-align: center; font-weight: bold;">📊 Trends</div>
+      </div>
+      <!-- Chat Interface Mock -->
+      <div style="flex: 1; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; background: #121214;">
+        <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 6px; font-size: 0.55rem; color: #a1a1aa;">
+          <strong>Sidebar analytics tab selected:</strong>
+          <div style="margin-top: 4px; height: 4px; width: 80%; background: #ef4444; border-radius: 2px;"></div>
+          <div style="margin-top: 2px; font-size: 0.45rem; color: #71717a;">High anxiety detected wednesday.</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); height: 20px; border-radius: 4px; border: 1px dashed rgba(255,255,255,0.1);"></div>
+      </div>
+    </div>
+    <div class="card-body" style="background: #18181b; color: #f4f4f5;">
+      <h3 style="font-size: 1rem; color: #fff; margin-bottom: 4px;">Approach B: Sidebar Insights & Command Tab</h3>
+      <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4;">
+        Integrate features into our existing slide-in sidebar. We add a third <strong>"Analytics"</strong> or <strong>"Insights"</strong> tab alongside "Sessions" and "Entries". The user can toggle the sidebar to view mood graphs, longitudinal search suggestions, and read/trigger reviews while remaining on the active chat.
+      </p>
+      <div class="pros-cons" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+        <div class="pros" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Pros</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>Zero screen navigation; fast context switching.</li>
+            <li>Keeps active chat central at all times.</li>
+          </ul>
+        </div>
+        <div class="cons" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Cons</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>Sidebar space is cramped for comprehensive graphs.</li>
+            <li>No full-screen visual room for long text reviews.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPROACH C -->
+  <div class="card" data-choice="chat_conversational_widgets" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #121214; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; height: 100%;">
+      <!-- Chat bubbles -->
+      <div style="align-self: flex-start; background: #27272a; padding: 6px 10px; border-radius: 12px 12px 12px 2px; max-width: 80%; font-size: 0.55rem; color: #e4e4e7; margin-bottom: 6px; border: 1px solid #3f3f46;">
+        "How has my anxiety changed over the last month?"
+      </div>
+      
+      <!-- Interactive Widget bubble -->
+      <div style="align-self: flex-end; background: rgba(124, 110, 247, 0.08); border: 1px solid rgba(124, 110, 247, 0.25); padding: 8px; border-radius: 12px 12px 2px 12px; max-width: 90%; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 0.55rem; color: #fff; font-weight: bold; display: flex; align-items: center; gap: 4px;">
+          <span>📈 Monthly Anxiety Trend</span>
+        </div>
+        <div style="height: 25px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: flex-end; gap: 4px;">
+          <div style="background: #7c6ef7; height: 90%; width: 6px; border-radius: 1px;"></div>
+          <div style="background: #7c6ef7; height: 60%; width: 6px; border-radius: 1px;"></div>
+          <div style="background: #7c6ef7; height: 40%; width: 6px; border-radius: 1px;"></div>
+          <div style="background: #7c6ef7; height: 25%; width: 6px; border-radius: 1px;"></div>
+        </div>
+        <span style="font-size: 0.45rem; color: #a1a1aa; line-height: 1.2;">Your anxiety peaked mid-week due to workload, but decreased after your journaling session on Friday.</span>
+      </div>
+    </div>
+    <div class="card-body" style="background: #18181b; color: #f4f4f5;">
+      <h3 style="font-size: 1rem; color: #fff; margin-bottom: 4px;">Approach C: Conversational Inline Widgets</h3>
+      <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4;">
+        A fully-conversational, text-first integration. The features are built into the chat companion itself. If the user asks a longitudinal query like <em>"Show me how my anxiety has been changing"</em> or <em>"Give me my weekly reflection"</em>, the AI renders interactive graphs or cards <strong>inline inside the chat bubble</strong>.
+      </p>
+      <div class="pros-cons" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+        <div class="pros" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Pros</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>Extremely organic and immersive.</li>
+            <li>No new dashboard pages or tabs to build.</li>
+          </ul>
+        </div>
+        <div class="cons" style="background: transparent; padding: 0;">
+          <h4 style="margin-bottom: 2px;">Cons</h4>
+          <ul style="padding-left: 12px; margin-left: 0; color: #a1a1aa; font-size: 0.75rem;">
+            <li>Harder for the user to quickly glance at historical trends at any time.</li>
+            <li>Requires typing a question to view a graph.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+</div>

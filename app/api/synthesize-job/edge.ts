@@ -3,36 +3,13 @@ export const runtime = 'edge'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { buildEntrySummary, embedText } from '@/lib/embeddings'
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_MODEL = 'gemini-3-flash-preview'
+import { callOpenRouter } from '@/lib/openrouter'
 
 async function callGemini(prompt: string): Promise<string> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 2048,
-          temperature: 0.7,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
+  return callOpenRouter(
+    [{ role: 'user', content: prompt }],
+    { responseMimeType: 'application/json', temperature: 0.7 }
   )
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Gemini API error: ${error}`)
-  }
-
-  const data = await response.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
 }
 
 export async function POST(request: Request) {

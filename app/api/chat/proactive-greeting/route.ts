@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callOpenRouter } from '@/lib/openrouter';
 import { getUserPeerCard } from '@/lib/honcho';
 
 export async function GET() {
@@ -23,9 +23,6 @@ export async function GET() {
       ?.map((entry) => JSON.stringify(entry.emotions))
       .join(', ') || 'No emotional logs yet';
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-
     const prompt = `You are a warm, honest, non-sycophantic journaling companion.
 Your goal is to greet the user and proactively ask a personalized, empathetic opening question based on their psychological Peer Card and recent emotional tags.
 
@@ -37,8 +34,11 @@ ${emotionsSummary}
 
 Write a natural, warm, conversational greeting of 2-3 sentences. Proactively ask a question that references their recent situation or overall state. Avoid bullet points, lists, or markdown formatting. Be humble and authentic. Do not say "Based on your Peer Card" or "I noticed in your files". Present yourself naturally as their thinking partner.`;
 
-    const response = await model.generateContent(prompt);
-    const greeting = response.response.text().trim();
+    const rawResponse = await callOpenRouter(
+      [{ role: 'user', content: prompt }],
+      { temperature: 0.7 }
+    );
+    const greeting = rawResponse.trim();
 
     return NextResponse.json({ greeting });
   } catch (err) {

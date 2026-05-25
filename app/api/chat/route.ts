@@ -2,7 +2,7 @@ export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import { streamOpenRouter, OpenRouterMessage } from '@/lib/openrouter'
 import {
   embedText,
   retrieveRelevantEntries,
@@ -13,11 +13,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getUserPeerCard, syncMessagesToHoncho } from '@/lib/honcho'
 
 // ─── AI provider detection ────────────────────────────────────────────────────
-const hasClaudeKey =
-  !!process.env.ANTHROPIC_API_KEY &&
-  process.env.ANTHROPIC_API_KEY !== 'sk-ant-...'
-
-const hasGeminiKey = !!process.env.GEMINI_API_KEY
+const hasOpenRouterKey = !!process.env.OPENROUTER_API_KEY
 
 const BASE_SYSTEM_PROMPT = `You are a warm, empathetic, and authentic journaling companion. Talk in a relaxed, natural, and conversational tone, like a supportive friend who is deeply present with the user.
 Your role is to help the user think clearly, explore their thoughts, and reflect honestly on their experiences:
@@ -82,149 +78,6 @@ async function buildSystemPrompt(
   }
 }
 
-// ─── Claude streaming helper ──────────────────────────────────────────────────
-async function streamClaude(
-  messages: Message[],
-  systemPrompt: string,
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
-): Promise<string> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  let fullText = ''
-  const claudeMessages = messages.map(({ role, content }) => ({ role, content }))
-
-  const claudeStream = anthropic.messages.stream({
-    model: 'claude-opus-4-5',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages: claudeMessages,
-  })
-
-  for await (const chunk of claudeStream) {
-    if (
-      chunk.type === 'content_block_delta' &&
-      chunk.delta.type === 'text_delta'
-    ) {
-      fullText += chunk.delta.text
-      controller.enqueue(encoder.encode(chunk.delta.text))
-    }
-  }
-
-  return fullText
-}
-
-// ─── Gemini streaming helper (with tool support) ──────────────────────────────
-async function streamGemini(
-  messages: Message[],
-  systemPrompt: string,
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
-): Promise<string> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-3-flash-preview',
-    systemInstruction: systemPrompt,
-    tools: [
-      {
-        functionDeclarations: [
-          {
-            name: 'search_past_entries',
-            description:
-              'Search the user\'s past journal entries for relevant context. Call this when the user references something from their past (e.g. a person, situation, or feeling) that you don\'t have context for.',
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                query: {
-                  type: SchemaType.STRING,
-                  description: 'A short natural-language description of what to search for, e.g. "anxiety about work" or "relationship with father"',
-                },
-              },
-              required: ['query'],
-            },
-          },
-        ],
-      },
-    ],
-  })
-
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }))
-
-  const lastMessage = messages[messages.length - 1]
-  const chat = model.startChat({ history })
-
-  // ── First send ──
-  let result = await chat.sendMessageStream(lastMessage.content)
-
-  let fullText = ''
-
-  // Agentic loop: handle potential tool calls before streaming final text
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    // Collect all chunks from this stream turn
-    const parts = []
-    for await (const chunk of result.stream) {
-      parts.push(chunk)
-    }
-
-    // Aggregate the full response for this turn
-    const response = await result.response
-
-    // Check for a function call
-    const fnCall = response.candidates?.[0]?.content?.parts?.find(
-      (p) => p.functionCall
-    )?.functionCall
-
-    if (fnCall && fnCall.name === 'search_past_entries') {
-      const query = (fnCall.args as { query: string }).query
-      console.log(`[RAG] Tool call: search_past_entries("${query}")`)
-
-      // Execute the tool
-      let toolResultText = 'No relevant past entries found.'
-      try {
-        const queryEmbedding = await embedText(query)
-        const entries = await retrieveRelevantEntries(supabase, userId, queryEmbedding, 3)
-        if (entries.length > 0) {
-          toolResultText = formatEntriesAsContext(entries)
-        }
-      } catch (err) {
-        console.error('[RAG] Tool execution error:', err)
-      }
-
-      // Send tool result back and get the next stream
-      result = await chat.sendMessageStream([
-        {
-          functionResponse: {
-            name: 'search_past_entries',
-            response: { result: toolResultText },
-          },
-        },
-      ])
-      // Loop again to check for another tool call or final text
-      continue
-    }
-
-    // No tool call — stream all buffered text chunks to client
-    for (const chunk of parts) {
-      const text = chunk.text()
-      if (text) {
-        fullText += text
-        controller.enqueue(encoder.encode(text))
-      }
-    }
-    break
-  }
-
-  return fullText
-}
-
 // ─── Route handler ────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
@@ -273,9 +126,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 403 })
     }
 
-    if (!hasClaudeKey && !hasGeminiKey) {
+    if (!hasOpenRouterKey) {
       return NextResponse.json(
-        { error: 'No AI provider configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY.' },
+        { error: 'No AI provider configured. Set OPENROUTER_API_KEY in environment variables.' },
         { status: 500 }
       )
     }
@@ -317,20 +170,21 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          if (hasClaudeKey) {
-            console.log('[AI] Using Claude')
-            fullResponseText = await streamClaude(messages, systemPrompt, controller, encoder)
-          } else {
-            console.log('[AI] Falling back to Gemini')
-            fullResponseText = await streamGemini(
-              messages,
-              systemPrompt,
-              supabase,
-              user.id,
-              controller,
-              encoder
-            )
-          }
+          console.log('[AI] Directing request to OpenRouter')
+          const openRouterMessages: OpenRouterMessage[] = [
+            { role: 'system', content: systemPrompt },
+            ...messages.map((m) => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            })),
+          ]
+
+          fullResponseText = await streamOpenRouter(
+            openRouterMessages,
+            controller,
+            encoder,
+            { temperature: 0.7 }
+          )
 
           controller.close()
 
@@ -365,7 +219,7 @@ export async function POST(request: Request) {
         'Content-Type': 'text/plain; charset=utf-8',
         'Transfer-Encoding': 'chunked',
         'X-Content-Type-Options': 'nosniff',
-        'X-AI-Provider': hasClaudeKey ? 'claude' : 'gemini',
+        'X-AI-Provider': 'openrouter',
       },
     })
   } catch (err) {

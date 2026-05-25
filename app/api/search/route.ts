@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callOpenRouter } from '@/lib/openrouter';
 import { embedText, retrieveRelevantEntries } from '@/lib/embeddings';
 import { queryHonchoConclusions } from '@/lib/honcho';
 
@@ -31,10 +31,7 @@ export async function POST(req: Request) {
     const conclusions = await queryHonchoConclusions(user.id, query, 3);
     const honchoContext = conclusions.join('\n');
 
-    // 3. Synthesize via Gemini
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-
+    // 3. Synthesize via OpenRouter
     const systemPrompt = `You are a warm, honest, non-sycophantic journaling companion.
 The user is asking a longitudinal question across all of their past journal entries and conversation logs.
 Provide a clear, cohesive, and deeply insightful summary answering their query using the structured Supabase entries (RAG context) and the Honcho conclusions (Cognitive context).
@@ -47,8 +44,11 @@ ${honchoContext || 'No high-level cognitive memory conclusions match.'}
 
 Answer in 3-5 sentences. Reference specific dates or insights when present. Be authentic. Do not mention system mechanics like "RAG context" or "Honcho". Talk as their warm thinking companion.`;
 
-    const response = await model.generateContent(systemPrompt);
-    const answer = response.response.text().trim();
+    const rawResponse = await callOpenRouter(
+      [{ role: 'user', content: systemPrompt }],
+      { temperature: 0.7 }
+    );
+    const answer = rawResponse.trim();
 
     return NextResponse.json({ answer });
   } catch (err) {

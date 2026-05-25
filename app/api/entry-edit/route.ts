@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { embedText, buildEntrySummary } from '@/lib/embeddings'
+import { callOpenRouter, OpenRouterMessage } from '@/lib/openrouter'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -68,19 +69,15 @@ Rules:
 Current journal entry:
 ${entryJson}`
 
-    const { GoogleGenerativeAI } = await import('@google/generative-ai')
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      systemInstruction: systemPrompt,
-    })
-    const history = messages.slice(0, -1).map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }))
-    const chat = model.startChat({ history })
-    const result = await chat.sendMessage(messages[messages.length - 1].content)
-    const rawResponse = result.response.text()
+    const openRouterMessages: OpenRouterMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ]
+
+    const rawResponse = await callOpenRouter(openRouterMessages, { temperature: 0.7 })
 
     // Extract and strip PATCH block
     let message = rawResponse

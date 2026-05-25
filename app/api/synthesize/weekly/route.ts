@@ -1,7 +1,6 @@
-// Weekly reflection digest generator API endpoint
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callOpenRouter } from '@/lib/openrouter';
 import { getUserPeerCard } from '@/lib/honcho';
 import { embedText } from '@/lib/embeddings';
 
@@ -27,12 +26,6 @@ export async function POST() {
       ?.map((c) => c.messages.map((m: any) => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.content}`).join('\n'))
       .join('\n\n---\n\n') || 'No conversation logs this week.';
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      generationConfig: { responseMimeType: 'application/json' },
-    });
-
     const prompt = `You are a warm, honest, non-sycophantic journaling companion.
 Analyze the user's conversation history and their psychological Peer Card from the past week.
 Synthesize a comprehensive structured weekly reflection entry. Return ONLY valid JSON matching this schema:
@@ -54,8 +47,11 @@ ${conversationsText}
 
 Only extract authentic details. In "summary", write a warm 3-4 sentence digest of their week, highlighting self-reflection. Do not include markdown formatting or outer quotes, just pure valid JSON.`;
 
-    const response = await model.generateContent(prompt);
-    const data = JSON.parse(response.response.text());
+    const rawResponse = await callOpenRouter(
+      [{ role: 'user', content: prompt }],
+      { responseMimeType: 'application/json', temperature: 0.7 }
+    );
+    const data = JSON.parse(rawResponse);
 
     // Generate embedding from weekly reflection summary for RAG retrieval
     const embeddingText = `Weekly Reflection Digest - ${data.summary} Emotions: ${data.emotions.map((e: any) => e.label).join(', ')}. Patterns: ${data.patterns.map((p: any) => p.theme).join(', ')}`;
