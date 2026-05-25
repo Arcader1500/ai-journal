@@ -287,6 +287,33 @@ export async function POST(request: Request) {
     // 5. Stream response from whichever provider is available
     const encoder = new TextEncoder()
     let fullResponseText = ''
+    let saved = false
+
+    // Save partial stream if the client disconnects or aborts the request
+    request.signal.addEventListener('abort', async () => {
+      if (!saved) {
+        saved = true
+        console.log('[AI] Client connection aborted. Persisting partial response...')
+        const partialText = fullResponseText.trim()
+          ? `${fullResponseText} ... [interrupted]`
+          : '[interrupted]'
+        
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: partialText,
+          timestamp: new Date().toISOString(),
+        }
+
+        await supabase
+          .from('conversations')
+          .update({ messages: [...messages, assistantMessage] })
+          .eq('id', conversationId)
+
+        syncMessagesToHoncho(user.id, conversationId, [...messages, assistantMessage]).catch((err) =>
+          console.error('[HONCHO] Background sync failed during abort:', err)
+        );
+      }
+    })
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -308,22 +335,25 @@ export async function POST(request: Request) {
 
           controller.close()
 
-          // 6. Persist full conversation to Supabase
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: fullResponseText,
-            timestamp: new Date().toISOString(),
+          if (!saved) {
+            saved = true
+            // 6. Persist full conversation to Supabase
+            const assistantMessage: Message = {
+              role: 'assistant',
+              content: fullResponseText,
+              timestamp: new Date().toISOString(),
+            }
+
+            await supabase
+              .from('conversations')
+              .update({ messages: [...messages, assistantMessage] })
+              .eq('id', conversationId)
+
+            // Sync full message list to Honcho in the background
+            syncMessagesToHoncho(user.id, conversationId, [...messages, assistantMessage]).catch((err) =>
+              console.error('[HONCHO] Background sync failed:', err)
+            );
           }
-
-          await supabase
-            .from('conversations')
-            .update({ messages: [...messages, assistantMessage] })
-            .eq('id', conversationId)
-
-          // Sync full message list to Honcho in the background
-          syncMessagesToHoncho(user.id, conversationId, [...messages, assistantMessage]).catch((err) =>
-            console.error('[HONCHO] Background sync failed:', err)
-          );
         } catch (err) {
           console.error('Streaming error:', err)
           controller.error(err)

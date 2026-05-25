@@ -170,6 +170,12 @@ export default function ChatInterface({
         ])
       }
 
+      // Immediately save the user message to Supabase to prevent loss
+      await supabase
+        .from('conversations')
+        .update({ messages: nextMessages })
+        .eq('id', activeConvId)
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
