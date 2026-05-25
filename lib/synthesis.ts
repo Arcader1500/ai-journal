@@ -2,11 +2,12 @@
  * lib/synthesis.ts
  *
  * Shared synthesis logic used by both:
- *  - POST /api/synthesize       (user-triggered, single conversation)
+ *  - POST /api/synthesize             (user-triggered, single conversation)
  *  - GET  /api/cron/synthesize-stale  (cron-triggered, batch)
  */
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { buildEntrySummary, embedText } from '@/lib/embeddings'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_MODEL = 'gemini-3-flash-preview'
@@ -18,18 +19,24 @@ interface ConversationMessage {
 
 interface SynthesisResult {
   entryId: string
-  topic: string
+  topic: string;
 }
 
-const SYNTHESIS_PROMPT_TEMPLATE = (messages: ConversationMessage[]) => `You are a reflective journal synthesis AI. Analyze the following conversation between a user and their journaling companion. Extract the key themes and produce a JSON object with exactly these fields:
-- "topic": a concise title for this journal entry (max 10 words)
-- "summary": a thoughtful 2-4 paragraph synthesis of what the user explored, what they realized, and any patterns or open questions that emerged
-- "keywords": an array of 3-6 keyword strings capturing the main themes
+const SYNTHESIS_PROMPT_TEMPLATE = (messages: ConversationMessage[]) => `You are a reflective journal synthesis AI. Analyze the following conversation between a user and their journaling companion.
+Extract the key emotional tags, decisions, patterns, questions, and entity contexts. Respond ONLY with a valid JSON object matching exactly this schema, with no preamble, no markdown code blocks:
+
+{
+  "emotions": [{ "label": string, "intensity": float 0-1 }],
+  "decisions": [{ "action": string, "considered": string }],
+  "patterns": [{ "theme": string, "note": string }],
+  "open_questions": [string],
+  "key_context": [{ "entity": string, "role": string }]
+}
+
+Be precise. Do not invent details. Only extract what is explicitly present in the conversation.
 
 Conversation to analyze:
-${messages.map((msg) => `${msg.role}: ${msg.content}`).join('\n')}
-
-Respond ONLY with valid JSON matching the schema described above.`
+${messages.map((msg) => `${msg.role === 'assistant' ? 'AI' : 'User'}: ${msg.content}`).join('\n')}`
 
 async function callGemini(prompt: string): Promise<string> {
   const response = await fetch(
@@ -61,8 +68,8 @@ async function callGemini(prompt: string): Promise<string> {
  * Synthesizes a single conversation into a journal entry.
  *
  * Performs the full pipeline:
- *   1. Calls Gemini to extract topic, summary, keywords
- *   2. Inserts a row into `entries`
+ *   1. Calls Gemini to extract emotions, decisions, patterns, questions, context
+ *   2. Inserts a row into `journal_entries`
  *   3. Marks `conversations.synthesized = true`
  *   4. Generates and stores an embedding (best-effort, non-fatal)
  *
@@ -94,19 +101,17 @@ export async function synthesizeConversation(
 
   const entryData = JSON.parse(cleaned)
 
-  if (!entryData.topic || !entryData.summary) {
-    throw new Error('Invalid entry format from Gemini')
-  }
-
   // ── 2. Insert journal entry ───────────────────────────────────────────────
   const { data: insertedEntry, error: insertError } = await supabase
-    .from('entries')
+    .from('journal_entries')
     .insert({
       user_id: userId,
       conversation_id: conversationId,
-      topic: entryData.topic,
-      summary: entryData.summary,
-      keywords: entryData.keywords || [],
+      emotions: entryData.emotions || [],
+      decisions: entryData.decisions || [],
+      patterns: entryData.patterns || [],
+      open_questions: entryData.open_questions || [],
+      key_context: entryData.key_context || [],
       created_at: new Date().toISOString(),
     })
     .select('id')
@@ -124,30 +129,18 @@ export async function synthesizeConversation(
 
   // ── 4. Generate embedding (best-effort) ───────────────────────────────────
   try {
-    const embeddingRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'models/text-embedding-004',
-          content: { parts: [{ text: entryData.summary }] },
-        }),
-      }
-    )
-    if (embeddingRes.ok) {
-      const embeddingData = await embeddingRes.json()
-      const embedding = embeddingData.embedding?.values
-      if (embedding) {
-        await supabase
-          .from('entries')
-          .update({ embedding })
-          .eq('id', insertedEntry.id)
-      }
+    const summary = buildEntrySummary(entryData)
+    const embedding = await embedText(summary)
+    if (embedding) {
+      await supabase
+        .from('journal_entries')
+        .update({ embedding })
+        .eq('id', insertedEntry.id)
     }
   } catch (embedError) {
     console.warn('[synthesis] Failed to generate embedding (non-fatal):', embedError)
   }
 
-  return { entryId: insertedEntry.id, topic: entryData.topic }
+  const mainTopic = entryData.patterns?.[0]?.theme || 'Reflective Journal Entry'
+  return { entryId: insertedEntry.id, topic: mainTopic }
 }

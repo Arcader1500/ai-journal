@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     // Guard: already synthesized?
     const { data: existingEntry } = await supabase
-      .from('entries')
+      .from('journal_entries')
       .select('id')
       .eq('conversation_id', conversationId)
       .single()

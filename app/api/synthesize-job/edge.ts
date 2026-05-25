@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { buildEntrySummary, embedText } from '@/lib/embeddings'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_MODEL = 'gemini-3-flash-preview'
@@ -19,6 +20,7 @@ async function callGemini(prompt: string): Promise<string> {
         generationConfig: {
           maxOutputTokens: 2048,
           temperature: 0.7,
+          responseMimeType: 'application/json',
         },
       }),
     }
@@ -85,43 +87,62 @@ export async function POST(request: Request) {
       throw new Error('No messages in conversation')
     }
 
-    const prompt = messages.map((msg: any) => `${msg.role}: ${msg.content}`).join('\n')
+    const prompt = `You are a reflective journal synthesis AI. Analyze the following conversation between a user and their journaling companion.
+Extract the key emotional tags, decisions, patterns, questions, and entity contexts. Respond ONLY with a valid JSON object matching exactly this schema, with no preamble, no markdown code blocks:
+
+{
+  "emotions": [{ "label": string, "intensity": float 0-1 }],
+  "decisions": [{ "action": string, "considered": string }],
+  "patterns": [{ "theme": string, "note": string }],
+  "open_questions": [string],
+  "key_context": [{ "entity": string, "role": string }]
+}
+
+Be precise. Do not invent details. Only extract what is explicitly present in the conversation.
+
+Conversation to analyze:
+${messages.map((msg: any) => `${msg.role === 'assistant' ? 'AI' : 'User'}: ${msg.content}`).join('\n')}`
 
     // Call Gemini
     const journalEntry = await callGemini(prompt)
 
-    // Parse entry structure (expected format: topic, summary, keywords)
-    const entryData = JSON.parse(journalEntry)
+    // Strip markdown fences if Gemini wraps with them despite responseMimeType
+    const cleaned = journalEntry
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '')
+      .trim()
 
-    // Validate entry structure
-    if (!entryData.topic || !entryData.summary) {
-      throw new Error('Invalid entry format from Gemini')
-    }
+    // Parse entry structure
+    const entryData = JSON.parse(cleaned)
 
     // Insert journal entry
-    const { error: insertError } = await supabase
-      .from('entries')
+    const { data: insertedEntry, error: insertError } = await supabase
+      .from('journal_entries')
       .insert({
         user_id: user.id,
         conversation_id: conversationId,
-        topic: entryData.topic,
-        summary: entryData.summary,
-        keywords: entryData.keywords || [],
+        emotions: entryData.emotions || [],
+        decisions: entryData.decisions || [],
+        patterns: entryData.patterns || [],
+        open_questions: entryData.open_questions || [],
+        key_context: entryData.key_context || [],
         created_at: new Date().toISOString(),
       })
+      .select('id')
+      .single()
 
-    if (insertError) {
-      throw new Error(`Failed to insert entry: ${insertError.message}`)
+    if (insertError || !insertedEntry) {
+      throw new Error(`Failed to insert entry: ${insertError?.message}`)
     }
 
     // Generate embedding (best-effort, don't fail if this fails)
     try {
-      const { embedText } = await import('@/lib/embeddings')
-      const embedding = await embedText(entryData.summary)
+      const summary = buildEntrySummary(entryData)
+      const embedding = await embedText(summary)
       await supabase
-        .from('entries')
+        .from('journal_entries')
         .update({ embedding })
-        .eq('conversation_id', conversationId)
+        .eq('id', insertedEntry.id)
     } catch (embedError) {
       console.warn('Failed to generate embedding:', embedError)
       // Continue even if embedding fails
@@ -147,7 +168,7 @@ export async function POST(request: Request) {
     console.error('Error in Edge Function:', error)
 
     // Update job status to failed
-    const { jobId, conversationId } = await request.json().catch(() => ({ jobId: 'unknown', conversationId: 'unknown' }))
+    const { jobId } = await request.json().catch(() => ({ jobId: 'unknown' }))
 
     try {
       const cookieStore = await cookies()
@@ -164,7 +185,7 @@ export async function POST(request: Request) {
       )
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
+      if (user && jobId !== 'unknown') {
         await supabase
           .from('jobs')
           .update({
